@@ -1,0 +1,470 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  password         String?
+  firstName        String
+  lastName         String
+  phoneNumber      String?
+  userType         Role              @default(FAN)
+  isVerified       Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime?          @updatedAt
+  deletedAt        DateTime?
+  isAdmin          Boolean           @default(false)
+  profilePhotoUrl  String?      
+  ipAddressCountry String?
+  celebrityProfile CelebrityProfile?
+  wallet           Wallet?  
+  transactions     Transaction[]
+  userAccountDetails UserAccountDetails[]
+  requests         Requests[]
+  requestLimit     RequestLimit?
+  activityLogs     ActivityLog[]
+  bankAccounts     BankAccount[]
+  receivedActivities ActivityLog[]   @relation("ActivityRecipient")
+}
+
+model CountryCode {
+  id                String            @id @default(uuid())
+  code              String            @unique // e.g., "NG", "US", "GB"
+  name              String            // e.g., "Nigeria", "United States", "United Kingdom"
+  dialCode          String            // e.g., "+234", "+1", "+44"
+  flagEmoji         String?           // e.g., "🇳🇬", "🇺🇸", "🇬🇧"
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  celebrityProfiles CelebrityProfile[]
+}
+
+model CelebrityProfile {
+  id                    String       @id @default(uuid())
+  userId                String       @unique
+  legalName             String
+  displayName           String
+  dateOfBirth           DateTime
+  countryCodeId         String
+  phoneNumber           String
+  countryOfResidence    String
+  primarySocialPlatform String
+  socialHandle          String
+  followers             String
+  profilePhotoUrl       String?
+  profession            String
+  additionalDescription String?
+  categoryId            String? 
+  managerName         String?
+  managerPhone          String?    
+  requestPrice          Decimal        @default(0) @db.Decimal(15, 2)  
+  requestPriceCurrency  VybraaCurrency @default(USD)
+  onboardingStep        Int            @default(1)
+  isOnboardingComplete  Boolean        @default(false)
+  isUnderReview         Boolean        @default(true)
+  isTrending            Boolean        @default(false)
+  reviewStatus          ReviewStatus   @default(PENDING)
+  createdAt             DateTime       @default(now())
+
+  updatedAt             DateTime       @updatedAt
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  countryCode           CountryCode    @relation(fields: [countryCodeId], references: [id])
+  category              Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  requests              Requests[]
+}
+
+model Requests {
+  id                    String            @id @default(uuid())
+  userId                String
+  celebrityProfileId    String
+  instructions          String
+  occasion              RequestOccasion   
+  recipient             RecipientEnum
+  forName               String?
+  videoUrl              String?
+  fromName              String?
+  isRequestPaid         Boolean           @default(false)
+  price                 Decimal           @default(0) @db.Decimal(15, 2)  
+  serviceFeeId          String    
+  status                RequestStatus     @default(PENDING)    
+  paymentReference      String?           @unique
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime?          @updatedAt
+  deletedAt             DateTime? 
+  //Relations
+  user                  User              @relation(fields: [userId], references: [id])
+  celebrityProfile      CelebrityProfile  @relation(fields: [celebrityProfileId], references: [id])
+  vybraaServiceFee      VybraBillingFees    @relation(fields: [serviceFeeId], references: [id])
+  transaction          Transaction[]
+  walletEarningsHistory WalletEarningsHistory[]
+  @@index([createdAt])
+  @@map("requests")
+}
+
+
+model VybraBillingFees {
+  id          String       @id @default(uuid())
+  name        String 
+  price       Decimal      @default(0) @db.Decimal(15, 2)  
+  currency    String       @default("NGN")
+  isActive    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  request     Requests[]
+  @@map("vybra_billing_fee")
+}
+
+model Category{
+  id                 String  @id @default(uuid())
+  name               String  
+  description        String?
+  status             Boolean @default(true)
+  createdAt          DateTime @default(now())
+  celebrityProfile   CelebrityProfile[]
+}
+
+model FlutterWaveKey{
+  id               String     @id @default(uuid())
+  key              String?
+  secret_key       String?   
+  client_id        String?
+  client_secret    String?
+  access_token     String?
+  isActive         Boolean    @default(false)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+model VerifyToken {
+  id    String   @id @default(uuid())
+  token String
+  ttl   DateTime
+}
+
+model ResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  email     String
+  ttl       DateTime
+  createdAt DateTime @default(now())
+}
+
+model MagicLinkToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  email     String
+  ttl       DateTime
+  type      String
+  createdAt DateTime @default(now())
+}
+
+
+
+
+model Currency {
+  id          String   @id @default(cuid())
+  code        String   @unique // e.g., "USD", "EUR", "GBP"
+  name        String   // e.g., "US Dollar", "Euro", "British Pound"
+  symbol      String   // e.g., "$", "€", "£"
+  decimalPlaces Int    @default(2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  exchangeRates ExchangeRate[]
+  wallets       Wallet[]           // Add this relation
+
+  @@map("currencies")
+}
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  fromCurrency String   // Base currency (usually USD)
+  toCurrency   String   // Target currency
+  rate         Decimal  @db.Decimal(10, 6)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  currency     Currency @relation(fields: [toCurrency], references: [code])
+
+  @@unique([fromCurrency, toCurrency])
+  @@map("exchange_rates")
+}
+
+
+
+enum Role {
+  FAN
+  CELEBRITY
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Wallet {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  walletBalance     Decimal  @default(0) @db.Decimal(15, 2)
+  escrowBalance Decimal @default(0) @db.Decimal(15, 2)  // Funds held in escrow
+  totalBalance Decimal @default(0) @db.Decimal(15, 2) // balance - escrowBalance
+  isSuperAdmin  Boolean @default(false)
+  currencyId  String
+  isFreezed   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency    Currency @relation(fields: [currencyId], references: [id])
+  walletEarningsHistory WalletEarningsHistory[]
+  @@map("wallets")
+}
+
+model Transaction {
+  id          String              @id @default(uuid())
+  userId      String
+  paymentMethod String
+  type        TransactionType
+  isInEscrow  Boolean             @default(false)
+  escrowType  EscrowType?
+  escrowStatus EscrowStatus?
+  currency     String
+  releaseDate DateTime?
+  amount      Decimal             @db.Decimal(15, 2)
+  description String?
+  reference   String?             // External reference (e.g., payment gateway reference)
+  flutterwaveTransactionId String?
+  status      TransactionStatus   @default(PENDING)
+  metadata    Json?               // Additional transaction data
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  requestId   String?
+
+  // Relations
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request   Requests?        @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  @@map("wallet_transactions")
+}
+
+
+
+model UserAccountDetails{
+  id              String     @id @default(uuid())
+  bankCode        String
+  accountNumber   String
+  routingNumber   String?
+  accountName     String
+  userId          String
+
+  //Relations
+  user            User       @relation(fields: [userId], references: [id])
+
+}
+
+
+model WalletEarningsHistory{
+  id              String     @id @default(uuid())
+  amount          Decimal    @db.Decimal(15, 2)
+  walletId        String
+  requestId       String
+  vybraaFee       Decimal    @db.Decimal(15, 2)
+  currency        String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  status          WalletEarningsHistoryStatus   @default(CREDIT)
+  //Relations
+  wallet          Wallet     @relation(fields: [walletId], references: [id])
+  request         Requests   @relation(fields: [requestId], references: [id])
+  @@map("wallet_earnings_history")
+}
+
+enum WalletEarningsHistoryStatus {
+CREDIT
+DEBIT
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+  TRANSFER
+  REFUND
+  WITHDRAWAL
+  DEPOSIT
+  ESCROW_HOLD
+  ESCROW_RELEASE
+  ESCROW_REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  PROCESSING
+}
+
+enum EscrowType {
+  REQUEST_PAYMENT      // Escrow for celebrity request payments
+  DISPUTE_HOLD         // Escrow held during disputes
+  VERIFICATION_HOLD    // Escrow held during verification processes
+  CUSTOM               // Custom escrow conditions
+}
+
+enum EscrowStatus {
+  PENDING             // Escrow is active and holding funds
+  RELEASED            // Funds have been released to recipient
+  REFUNDED            // Funds have been refunded to sender
+  EXPIRED             // Escrow expired and funds returned
+  DISPUTED            // Escrow is under dispute resolution
+}
+
+
+enum RequestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  DISPUTED
+  DECLINED
+}
+
+enum RequestOccasion{
+  BIRTHDAY_SHOUTOUT
+  ADVICE
+  ANNIVERSARY
+  MARRIAGE_PROPOSAL
+}
+
+
+enum RecipientEnum {
+  ME 
+  FRIEND
+}
+
+enum VybraaCurrency {
+  USD
+  EUR
+  CNY
+  NGN
+}
+
+model RequestLimit {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  monthlyLimit      Int      @default(10)
+  currentMonthCount Int      @default(0)
+  resetDate         DateTime
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("request_limits")
+}
+
+model VybraaConfigSettings {
+  id                String   @id @default(uuid())
+  name              String
+  description       String?
+  slug              String
+  value             String
+  calculationType   CalculationType @default(PERCENTAGE)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("vybraa_config_settings")
+  @@unique([slug])
+}
+
+model ActivityLog {
+  id                String          @id @default(uuid())
+  userId            String          // User who performed the action
+  action            ActivityAction  // Type of action performed
+  actionDescription String          // Human-readable description
+  entityType        String?         // Type of entity affected (Request, Payment, User)
+  entityId          String?         // ID of the affected entity
+  recipientId       String?         // ID of user affected by the action (for requests)
+  metadata          Json?           // Additional data (before/after state, etc.)
+  ipAddress         String?         // IP address of the user
+  userAgent         String?         // User agent string
+  createdAt         DateTime        @default(now())
+  
+  // Relations
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipient         User?           @relation("ActivityRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+model BankAccount {
+  id              String   @id @default(uuid())
+  bankCode        String
+  accountNumber   String
+  routingNumber   String?
+  accountName     String
+  userId          String
+  recipient       String?
+  //Relations
+  user            User       @relation(fields: [userId], references: [id])
+
+  @@map("bank_accounts")
+  @@unique([bankCode, accountNumber])
+}
+
+enum ActivityAction {
+  // Auth actions
+  USER_LOGIN
+  USER_LOGOUT
+  USER_REGISTER
+  PASSWORD_RESET
+  EMAIL_VERIFIED
+  
+  // Request actions
+  REQUEST_CREATED
+  REQUEST_ACCEPTED
+  REQUEST_DECLINED
+  REQUEST_COMPLETED
+  REQUEST_CANCELLED
+  REQUEST_VIDEO_UPLOADED
+  
+  // Payment actions
+  PAYMENT_INITIATED
+  PAYMENT_COMPLETED
+  PAYMENT_FAILED
+  PAYMENT_REFUNDED
+  
+  // Wallet actions
+  WALLET_CREATED
+  WALLET_CREDITED
+  WALLET_DEBITED
+  WITHDRAWAL_INITIATED
+  WITHDRAWAL_COMPLETED
+  
+  // Profile actions
+  PROFILE_UPDATED
+  PROFILE_PHOTO_UPDATED
+  PRICE_UPDATED
+}
+
+enum CalculationType {
+  PERCENTAGE
+  FIXED
+}
