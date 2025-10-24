@@ -4,6 +4,11 @@ export type FlutterwaveResponse<T> = {
   data: T;
 };
 
+export type PaymentResponseType<T> = {
+  message: string;
+  status: boolean;
+  data: T;
+};
 export interface FlutterwaveTransaction {
   id: number;
   tx_ref: string;
@@ -21,4 +26,19 @@ export interface FlutterwaveTransaction {
     expiry: string;
   };
   metadata: any;
+}
+
+export interface BankListType {
+  code: string;
+  country: string;
+  currency: string;
+  name: string;
+  support_transfer: boolean;
+}
+
+export interface AccountResolutionResponse {
+  account_number: string;
+  bank_code: string;
+  account_name: string;
+  bank_name: string;
 }

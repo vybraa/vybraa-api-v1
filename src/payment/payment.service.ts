@@ -25,7 +25,13 @@ import {
   TransactionType,
   User,
 } from '@prisma/client';
-import { FlutterwaveResponse, FlutterwaveTransaction } from 'src/types/payment';
+import {
+  AccountResolutionResponse,
+  BankListType,
+  FlutterwaveResponse,
+  FlutterwaveTransaction,
+  PaymentResponseType,
+} from 'src/types/payment';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
@@ -690,7 +696,10 @@ export class PaymentService {
   /**
    * Resolve account
    */
-  async resolveAccount(bankCode: string, accountNumber: string) {
+  async resolveAccount(
+    bankCode: string,
+    accountNumber: string,
+  ): Promise<AccountResolutionResponse> {
     try {
       const response = await axios.get(
         `${configuration().paystack.paystackUrl}/bank/resolve?bank_code=${bankCode}&account_number=${accountNumber}`,
@@ -700,14 +709,15 @@ export class PaymentService {
           },
         },
       );
-      return response.data;
+      return (response.data as PaymentResponseType<AccountResolutionResponse>)
+        .data;
     } catch (error) {
       console.error('Error resolving account:', error);
       throw error;
     }
   }
 
-  async getBankList() {
+  async getBankList(): Promise<BankListType[]> {
     try {
       const response = await axios.get(
         `${configuration().paystack.paystackUrl}/bank`,
@@ -717,7 +727,7 @@ export class PaymentService {
           },
         },
       );
-      return response.data;
+      return (response.data as PaymentResponseType<BankListType[]>).data;
     } catch (error) {
       console.error('Error getting bank list:', error);
       throw error;
@@ -771,6 +781,17 @@ export class PaymentService {
       return response.data;
     } catch (error) {
       console.error('Error initiating bank account transfer:', error);
+      throw error;
+    }
+  }
+
+  async getBankAccountList(user: User) {
+    try {
+      return this.prisma.bankAccount.findMany({
+        where: { userId: user.id },
+      });
+    } catch (error) {
+      console.error('Error getting bank account list:', error);
       throw error;
     }
   }

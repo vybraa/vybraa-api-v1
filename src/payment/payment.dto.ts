@@ -1,4 +1,11 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { AccountType } from '@prisma/client';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreatePaymentDto {
   @IsNotEmpty()
@@ -32,9 +39,9 @@ export class CreateBankAccountDto {
   @IsString()
   routingNumber?: string;
 
-  @IsOptional()
-  @IsString()
-  recipient?: string;
+  @IsNotEmpty()
+  @IsEnum(AccountType)
+  accountType: AccountType;
 }
 
 export class InitiateBankAccountTransferDto {
