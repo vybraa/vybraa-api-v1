@@ -84,9 +84,7 @@ export default () => ({
   baseCurrency: process.env.BASE_CURRENCY || 'USD',
   paymentChannel: process.env.PAYMENT_CHANNEL || 'paystack',
   flutterwave: {
-    secretKey:
-      process.env.FLUTTERWAVE_SECRET_KEY ||
-      'FLWSECK_TEST-85d8e784cbfcdf1cd98301e4f807ecf5-X',
+    secretKey: process.env.FLUTTERWAVE_SECRET_KEY || '',
     secretHash: process.env.FLUTTERWAVE_SECRET_HASH || '',
     flutterwaveUrl:
       process.env.FLUTTERWAVE_URL || 'https://api.flutterwave.cloud',

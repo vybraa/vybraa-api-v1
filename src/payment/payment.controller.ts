@@ -370,4 +370,11 @@ export class PaymentController {
       initiateBankAccountTransferDto,
     );
   }
+
+  @Get('bank-account/list')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getBankAccountList(@UserDecorator() user: User) {
+    return this.paymentService.getBankAccountList(user);
+  }
 }
