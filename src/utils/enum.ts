@@ -14,6 +14,8 @@ export enum PaymentChannelEnum {
 }
 
 export enum TemplateConfigEnum {
+  Celebrity_Approved_Notification = 10,
+  Celebrity_Rejected_Notification = 11,
   Request_Completed_Notification = 9,
   Success_Request_Payment_Notification = 8,
   Vybraa_Verify_Mail = 6,

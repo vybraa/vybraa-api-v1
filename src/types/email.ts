@@ -28,4 +28,8 @@ export type EmailTemplateValueType = {
     occasion: string;
     requestId: string;
   };
+
+  [TemplateConfigEnum.Celebrity_Approved_Notification]: {
+    celebrityName: string;
+  };
 };
