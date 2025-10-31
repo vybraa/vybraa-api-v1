@@ -77,6 +77,20 @@ model CelebrityProfile {
   countryCode           CountryCode    @relation(fields: [countryCodeId], references: [id])
   category              Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   requests              Requests[]
+  celebrityGallery      CelebrityGallery[]
+}
+
+
+model CelebrityGallery {
+  id                String       @id @default(uuid())
+  celebrityProfileId String
+  videoUrl          String?
+  imageUrl          String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  celebrityProfile  CelebrityProfile @relation(fields: [celebrityProfileId], references: [id])
+  @@map("celebrity_gallery")
+  @@unique([celebrityProfileId, videoUrl])
 }
 
 model Requests {

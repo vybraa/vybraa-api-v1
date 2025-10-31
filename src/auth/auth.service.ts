@@ -17,7 +17,7 @@ import * as argon2 from 'argon2';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CelebrityProfile, User } from '@prisma/client';
+import { CelebrityGallery, CelebrityProfile, User } from '@prisma/client';
 import { HttpService } from '@nestjs/axios';
 import { randomBytes } from 'crypto';
 import { CloudinaryService } from 'src/common/cloudinary/cloudinary.service';
@@ -851,6 +851,49 @@ export class AuthService {
 
     return {
       message: 'Celebrity profile updated successfully',
+      data,
+    };
+  }
+
+  async updateCelebrityGallery(
+    file: Express.Multer.File,
+    celebrityGallery: CelebrityGallery,
+    user: User,
+  ) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // Upload file to Cloudinary
+    console.log('Backend: Uploading file to Cloudinary');
+    const uploadResult = await this.cloudinaryService.uploadProfilePhoto(
+      file,
+      user.id,
+      FolderEnum.CELEBRITY_PROFILE,
+    );
+    console.log('Backend: File uploaded to Cloudinary successfully');
+    const data: Partial<CelebrityGallery> = {
+      videoUrl: celebrityGallery.videoUrl || undefined,
+      imageUrl: celebrityGallery.imageUrl || undefined,
+    };
+
+    const celebrityProfile = await this.prisma.celebrityProfile.findUnique({
+      where: { userId: user.id },
+    });
+
+    if (!celebrityProfile) {
+      throw new BadRequestException('Celebrity profile not found');
+    }
+
+    await this.prisma.celebrityGallery.create({
+      data: {
+        celebrityProfileId: celebrityProfile.id,
+        videoUrl: celebrityGallery.videoUrl || undefined,
+        imageUrl: celebrityGallery.imageUrl || undefined,
+      },
+    });
+    return {
+      message: 'Celebrity gallery updated successfully',
       data,
     };
   }

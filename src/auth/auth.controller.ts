@@ -29,7 +29,6 @@ import { Public } from 'src/decorators/auth.decorator';
 import { UserDecorator } from 'src/decorators/user.decorator';
 import { CelebrityProfile, User } from '@prisma/client';
 import { FileUploadInterceptor } from 'src/common/interceptors/file-upload.interceptor';
-import { Request, Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -159,4 +158,14 @@ export class AuthController {
   remove(@Param('id') id: string) {
     return this.authService.remove(+id);
   }
+
+  // @Patch('celebrity-gallery')
+  // @UseInterceptors(FileUploadInterceptor)
+  // updateCelebrityGallery(
+  //   @UploadedFile() file: Express.Multer.File,
+  //   @Body() celebrityGallery: CelebrityGallery,
+  //   @UserDecorator() user: User,
+  // ) {
+  //   return this.authService.updateCelebrityGallery(celebrityGallery, user);
+  // }
 }

@@ -1,14 +1,18 @@
+import { PartialType } from '@nestjs/mapped-types';
 import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateFlutterKeyDto {
   @IsString()
   @IsNotEmpty()
-  key: string;
-}
+  client_id: string;
 
-export class UpdateFlutterKeyDto {
+  @IsString()
+  @IsNotEmpty()
+  client_secret: string;
+
   @IsString()
   @IsOptional()
-  key?: string;
+  secret_key: string;
 }
 
+export class UpdateFlutterKeyDto extends PartialType(CreateFlutterKeyDto) {}
