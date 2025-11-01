@@ -118,8 +118,11 @@ export class AuthService {
           isAdmin: user.isAdmin,
           isVerified: user.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
+
+      // Generate refresh token
+      const refreshToken = await this.generateRefreshToken(user.id);
 
       return {
         message: 'Login successful',
@@ -132,6 +135,7 @@ export class AuthService {
           isVerified: user.isVerified,
         },
         accessToken: token,
+        refreshToken,
       };
     } catch (error) {
       if (
@@ -199,8 +203,11 @@ export class AuthService {
           userType: user.userType,
           isVerified: user.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
+
+      // Generate refresh token
+      const refreshToken = await this.generateRefreshToken(user.id);
 
       return {
         message: 'Social authentication successful',
@@ -213,6 +220,7 @@ export class AuthService {
           isVerified: user.isVerified,
         },
         accessToken: token,
+        refreshToken,
       };
     } catch (error) {
       console.log('Social auth error:', error);
@@ -270,19 +278,32 @@ export class AuthService {
 
   async refreshToken(refreshToken: string) {
     try {
-      const jwtSecret = this.configService.get<string>('AUTH_JWT_SECRET');
-      const payload = await this.jwtService.verify(refreshToken, {
-        secret: jwtSecret,
+      // Find refresh token in database
+      const storedToken = await this.prisma.refreshToken.findUnique({
+        where: { token: refreshToken },
+        include: { user: true },
       });
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.id },
-      });
+      if (!storedToken) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
 
+      // Check if token has expired
+      if (storedToken.expiresAt < new Date()) {
+        // Delete expired token
+        await this.prisma.refreshToken.delete({
+          where: { id: storedToken.id },
+        });
+        throw new UnauthorizedException('Refresh token has expired');
+      }
+
+      const user = storedToken.user;
       if (!user) {
         throw new UnauthorizedException('User not found');
       }
 
+      // Generate new access token
+      const jwtSecret = this.configService.get<string>('AUTH_JWT_SECRET');
       const newToken = this.jwtService.sign(
         {
           id: user.id,
@@ -292,7 +313,7 @@ export class AuthService {
           userType: user.userType,
           isVerified: user.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
 
       return {
@@ -307,6 +328,9 @@ export class AuthService {
         },
       };
     } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
@@ -398,6 +422,25 @@ export class AuthService {
     );
   }
 
+  private async generateRefreshToken(userId: string): Promise<string> {
+    // Generate a secure random token
+    const token = randomBytes(32).toString('hex');
+
+    // Store in database with 30 days expiration
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        token,
+        userId,
+        expiresAt,
+      },
+    });
+
+    return token;
+  }
+
   async verifyToken(body: VerificationTokenDto, user: User) {
     try {
       const tokenExist = await this.prisma.verifyToken.findFirst({
@@ -451,8 +494,11 @@ export class AuthService {
             isVerified: getUser.isVerified,
             celebrityProfile: getUser.celebrityProfile,
           },
-          { secret: jwtSecret },
+          { secret: jwtSecret, expiresIn: '24h' },
         );
+
+        // Generate refresh token
+        const refreshToken = await this.generateRefreshToken(user.id);
 
         // Determine onboarding status and next step
         let onboardingInfo = null;
@@ -480,6 +526,7 @@ export class AuthService {
         return {
           success: true,
           accessToken,
+          refreshToken,
           user: {
             id: getUser.id,
             email: getUser.email,
@@ -546,9 +593,11 @@ export class AuthService {
   }
 
   async logout(user: User) {
-    // In a stateless JWT setup, logout is typically handled client-side
-    // by removing the token. However, you could implement a token blacklist
-    // or use refresh tokens for more security.
+    // Delete all refresh tokens for this user
+    await this.prisma.refreshToken.deleteMany({
+      where: { userId: user.id },
+    });
+
     return { message: 'Logged out successfully' };
   }
 
@@ -608,8 +657,11 @@ export class AuthService {
           userType: newUser.userType,
           isVerified: newUser.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
+
+      // Generate refresh token
+      const refreshToken = await this.generateRefreshToken(newUser.id);
 
       return {
         message:
@@ -623,6 +675,7 @@ export class AuthService {
           isVerified: newUser.isVerified,
         },
         accessToken, // Return token for immediate authentication
+        refreshToken,
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -676,8 +729,12 @@ export class AuthService {
           userType: user.userType,
           isVerified: user.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
+
+      // Generate refresh token
+      const refreshToken = await this.generateRefreshToken(user.id);
+
       return {
         message:
           'Magic link sent to your email. Please check your inbox and click the link to log in.',
@@ -690,6 +747,7 @@ export class AuthService {
           isVerified: user.isVerified,
         },
         accessToken,
+        refreshToken,
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -744,8 +802,11 @@ export class AuthService {
           userType: user.userType,
           isVerified: user.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
+
+      // Generate refresh token
+      const refreshToken = await this.generateRefreshToken(user.id);
 
       // Delete used magic link token
       await this.prisma.magicLinkToken.delete({
@@ -766,6 +827,7 @@ export class AuthService {
           isVerified: user.isVerified,
         },
         accessToken,
+        refreshToken,
       };
     } catch (error) {
       if (error instanceof BadRequestException) {

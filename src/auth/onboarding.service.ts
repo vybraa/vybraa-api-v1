@@ -120,6 +120,7 @@ export class OnboardingService {
       };
       const accessToken = this.jwtService.sign(payload, {
         secret: process.env.AUTH_JWT_SECRET,
+        expiresIn: '24h',
       });
 
       return {
@@ -181,6 +182,7 @@ export class OnboardingService {
       };
       const accessToken = this.jwtService.sign(payload, {
         secret: process.env.AUTH_JWT_SECRET,
+        expiresIn: '24h',
       });
 
       return {
@@ -224,6 +226,7 @@ export class OnboardingService {
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.AUTH_JWT_SECRET,
+      expiresIn: '24h',
     });
 
     return {
@@ -295,6 +298,7 @@ export class OnboardingService {
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.AUTH_JWT_SECRET,
+      expiresIn: '24h',
     });
 
     return {
@@ -341,6 +345,7 @@ export class OnboardingService {
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.AUTH_JWT_SECRET,
+      expiresIn: '24h',
     });
 
     return {
@@ -409,6 +414,7 @@ export class OnboardingService {
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.AUTH_JWT_SECRET,
+      expiresIn: '24h',
     });
 
     //Create a limit request for the celebrity
