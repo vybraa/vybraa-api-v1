@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { User } from '@prisma/client';
+import { ReviewStatus, User } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RequestService } from 'src/request/request.service';
 import { ExploreData } from 'src/types/explore';
@@ -51,6 +51,8 @@ export class ProfileService {
         await this.prisma.celebrityProfile.findMany({
           where: {
             isTrending: true,
+            reviewStatus: ReviewStatus.APPROVED,
+            isUnderReview: false,
           },
           select: {
             id: true,
@@ -69,6 +71,8 @@ export class ProfileService {
 
       allExploreMetrics.singers = await this.prisma.celebrityProfile.findMany({
         where: {
+          reviewStatus: ReviewStatus.APPROVED,
+          isUnderReview: false,
           category: {
             name: {
               in: singersRelation,
@@ -89,6 +93,8 @@ export class ProfileService {
       allExploreMetrics.influencers =
         await this.prisma.celebrityProfile.findMany({
           where: {
+            reviewStatus: ReviewStatus.APPROVED,
+            isUnderReview: false,
             category: {
               name: {
                 in: influencersRelation,
@@ -108,6 +114,8 @@ export class ProfileService {
 
       allExploreMetrics.actors = await this.prisma.celebrityProfile.findMany({
         where: {
+          reviewStatus: ReviewStatus.APPROVED,
+          isUnderReview: false,
           category: {
             name: {
               in: actorsRelation,
@@ -128,6 +136,8 @@ export class ProfileService {
       allExploreMetrics.comedians = await this.prisma.celebrityProfile.findMany(
         {
           where: {
+            reviewStatus: ReviewStatus.APPROVED,
+            isUnderReview: false,
             category: {
               name: {
                 in: comediansRelation,
@@ -169,6 +179,8 @@ export class ProfileService {
     if (category === 'artists') {
       allExploreMetrics.singers = await this.prisma.celebrityProfile.findMany({
         where: {
+          reviewStatus: ReviewStatus.APPROVED,
+          isUnderReview: false,
           category: {
             name: {
               in: singersRelation,
@@ -191,6 +203,8 @@ export class ProfileService {
       allExploreMetrics.influencers =
         await this.prisma.celebrityProfile.findMany({
           where: {
+            reviewStatus: ReviewStatus.APPROVED,
+            isUnderReview: false,
             category: {
               name: {
                 in: influencersRelation,
@@ -212,6 +226,8 @@ export class ProfileService {
     if (category === 'actors') {
       allExploreMetrics.actors = await this.prisma.celebrityProfile.findMany({
         where: {
+          reviewStatus: ReviewStatus.APPROVED,
+          isUnderReview: false,
           category: {
             name: {
               in: actorsRelation,
@@ -233,6 +249,8 @@ export class ProfileService {
     if (category === 'comedians') {
       const comedians = await this.prisma.celebrityProfile.findMany({
         where: {
+          reviewStatus: ReviewStatus.APPROVED,
+          isUnderReview: false,
           category: {
             name: {
               in: comediansRelation,

@@ -73,6 +73,15 @@ export class OnboardingService {
       configuration().ipinfoUrl,
     );
 
+    const checkIfEmailExists = await this.prisma.user.findUnique({
+      where: {
+        email: data.email,
+      },
+    });
+    if (checkIfEmailExists) {
+      throw new BadRequestException('Email already exists');
+    }
+
     // Handle first-time registration
     if (data.isFirstTimeRegistration) {
       // Update user information and set user type to CELEBRITY
