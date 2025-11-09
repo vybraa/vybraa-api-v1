@@ -103,12 +103,20 @@ export class RequestController {
 
   @Put(':id/video')
   @Roles(Role.CELEBRITY)
-  @UseInterceptors(FileInterceptor('video'), VideoUploadInterceptor)
+  @UseInterceptors(
+    FileInterceptor('video', {
+      limits: {
+        fileSize: 15 * 1024 * 1024, // 15MB
+      },
+    }),
+    VideoUploadInterceptor,
+  )
   async updateVideo(
     @UserDecorator() user: User & { celebrityProfile: CelebrityProfile },
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
   ): Promise<{ message: string; videoUrl: string; requestId: string }> {
+    console.log('file', file);
     const updatedRequest = await this.requestService.updateVideo(
       id,
       file,

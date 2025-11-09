@@ -695,6 +695,13 @@ export class RequestService {
       include: { celebrityProfile: { include: { user: true } }, user: true },
     });
 
+    //check if size of file is greater than 15mb
+    if (file.size > 15 * 1024 * 1024) {
+      throw new BadRequestException(
+        'File size is too large. Maximum size is 15MB.',
+      );
+    }
+
     if (!request) {
       throw new NotFoundException('Request not found or access denied');
     }

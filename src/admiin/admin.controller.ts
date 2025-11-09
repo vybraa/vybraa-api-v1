@@ -17,6 +17,8 @@ import { AdminService } from './admin.service';
 import { Pagination } from 'src/types/pagination';
 import { User } from '@prisma/client';
 import { UpdatUserProfileDto } from './admin.dto';
+import { ChangeRequestStatusDto } from 'src/request/dtos/requests.dto';
+import { RequestStatus } from '@prisma/client';
 
 @Controller('admin')
 @UseGuards(AdminGuard)
@@ -37,6 +39,38 @@ export class AdminController {
   @Get('metrics')
   async getMetrics(): Promise<any> {
     return await this.adminService.getMetrics();
+  }
+
+  @Admin()
+  @Get('requests')
+  async getRequests(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(25), ParseIntPipe) limit: number,
+    @Query('status') status?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('search') search?: string,
+  ) {
+    const normalizedStatus =
+      status && Object.values(RequestStatus).includes(status as RequestStatus)
+        ? (status as RequestStatus)
+        : undefined;
+
+    return await this.adminService.getRequests(
+      page,
+      limit,
+      normalizedStatus,
+      paymentStatus,
+      search,
+    );
+  }
+
+  @Admin()
+  @Patch('requests/:id/status')
+  async updateRequestStatus(
+    @Param('id') id: string,
+    @Body() payload: ChangeRequestStatusDto,
+  ) {
+    return await this.adminService.updateRequestStatus(id, payload);
   }
 
   @Admin()
