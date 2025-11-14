@@ -1,10 +1,15 @@
-import { TransactionStatus, VybraaCurrency } from '@prisma/client';
+import {
+  TransactionStatus,
+  TransactionType,
+  VybraaCurrency,
+} from '@prisma/client';
 import {
   IsNotEmpty,
   IsString,
   IsNumber,
   IsOptional,
   IsEnum,
+  IsBoolean,
 } from 'class-validator';
 
 export enum PaymentStatus {
@@ -57,4 +62,32 @@ export class CreatePaymentRecordDto {
 
   @IsOptional()
   metadata?: any;
+
+  @IsOptional()
+  @IsEnum(TransactionType)
+  type?: TransactionType;
+
+  @IsOptional()
+  @IsBoolean()
+  isOtpSent?: boolean;
+
+  @IsOptional()
+  @IsString()
+  transferCode?: string;
+}
+
+export class FinalizeTransferDto {
+  @IsNotEmpty()
+  @IsString()
+  transferCode: string;
+
+  @IsNotEmpty()
+  @IsNumber()
+  otp: number;
+}
+
+export class ResendOtpDto {
+  @IsNotEmpty()
+  @IsString()
+  transferCode: string;
 }

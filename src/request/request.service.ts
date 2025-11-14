@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -29,6 +31,7 @@ export class RequestService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cloudinaryService: CloudinaryService,
+    @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
     private readonly eventEmitter: EventEmitter2,
   ) {
@@ -45,9 +48,16 @@ export class RequestService {
     const userData = await this.prisma.user.findUnique({
       where: { id: user.id },
     });
+
     if (user.userType === Role.CELEBRITY) {
+      const celebrityProfile = await this.prisma.celebrityProfile.findUnique({
+        where: { userId: user.id },
+      });
+      if (!celebrityProfile) {
+        throw new NotFoundException('Celebrity profile not found');
+      }
       const whereClause: Prisma.RequestsWhereInput = {
-        celebrityProfileId: user.celebrityProfile.id,
+        celebrityProfileId: celebrityProfile.id,
         status,
       };
 
@@ -205,6 +215,20 @@ export class RequestService {
       throw new NotFoundException('Conversion rate not found');
     }
     return amount * Number(conversionRateAmount.rate);
+  }
+
+  async convertToBaseCurrency(amount: number, currency: string = 'ngn') {
+    const conversionRateAmount = await this.prisma.exchangeRate.findFirst({
+      where: {
+        fromCurrency: configuration().baseCurrency.toUpperCase(),
+        toCurrency: currency.toUpperCase(),
+        isActive: true,
+      },
+    });
+    if (!conversionRateAmount) {
+      throw new NotFoundException('Conversion rate not found');
+    }
+    return amount / Number(conversionRateAmount.rate);
   }
 
   private getNextResetDate(): Date {

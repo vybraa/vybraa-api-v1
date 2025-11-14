@@ -10,7 +10,11 @@ import {
   CreatePaymentDto,
   InitiateBankAccountTransferDto,
 } from './payment.dto';
-import { CreatePaymentRecordDto } from './dtos/payment-record.dto';
+import {
+  CreatePaymentRecordDto,
+  FinalizeTransferDto,
+  ResendOtpDto,
+} from './dtos/payment-record.dto';
 import axios from 'axios';
 import configuration from 'src/config/configuration';
 import { PaymentChannelEnum, TemplateConfigEnum } from 'src/utils/enum';
@@ -31,14 +35,19 @@ import {
   FlutterwaveResponse,
   FlutterwaveTransaction,
   PaymentResponseType,
+  TransferRecipientResponseType,
 } from 'src/types/payment';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Inject, forwardRef } from '@nestjs/common';
+import { RequestService } from 'src/request/request.service';
 
 @Injectable()
 export class PaymentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(forwardRef(() => RequestService))
+    private readonly requestService: RequestService,
   ) {}
 
   async createPayment(
@@ -182,11 +191,13 @@ export class PaymentService {
     }
     return this.prisma.transaction.create({
       data: {
-        request: {
-          connect: {
-            id: paymentData.requestId,
-          },
-        },
+        request: paymentData.requestId
+          ? {
+              connect: {
+                id: paymentData.requestId,
+              },
+            }
+          : undefined,
         user: {
           connect: {
             id: paymentData.userId,
@@ -199,9 +210,11 @@ export class PaymentService {
         isInEscrow: true,
         escrowType: EscrowType.REQUEST_PAYMENT,
         escrowStatus: EscrowStatus.PENDING,
-        type: TransactionType.CREDIT,
+        type: paymentData.type || TransactionType.CREDIT,
+        isOtpSent: paymentData.isOtpSent || false,
         status: paymentData.status,
         metadata: paymentData.metadata,
+        transferCode: paymentData.transferCode || null,
       },
     });
   }
@@ -448,6 +461,7 @@ export class PaymentService {
         paymentMethod: data.payment_type || 'flutterwave',
         paymentReference: data.tx_ref,
         status: TransactionStatus.COMPLETED,
+
         metadata: {
           flw_ref: data.flw_ref,
           processor_response: data.processor_response,
@@ -736,6 +750,16 @@ export class PaymentService {
 
   async createBankAccount(user: User, bankAccount: CreateBankAccountDto) {
     try {
+      const ifUserHasBankAccount = await this.prisma.bankAccount.findFirst({
+        where: {
+          userId: user.id,
+          bankCode: bankAccount.bankCode,
+          accountNumber: bankAccount.accountNumber,
+        },
+      });
+      if (ifUserHasBankAccount) {
+        throw new BadRequestException('Bank account already exists');
+      }
       return this.prisma.bankAccount.create({
         data: {
           ...bankAccount,
@@ -757,20 +781,67 @@ export class PaymentService {
     initiateBankAccountTransferDto: InitiateBankAccountTransferDto,
   ) {
     try {
+      const convertionValue = 100;
+      const reference = crypto.randomUUID();
+      const transferRecipientId = await this.getOrCreateTransferRecipient(
+        user,
+        initiateBankAccountTransferDto.bankAccountId,
+      );
+
+      if (Number(initiateBankAccountTransferDto.amount) < 1) {
+        throw new BadRequestException('Minimum withdrawal amount is ₦1.00');
+      }
+
+      const userWallet = await this.prisma.wallet.findUnique({
+        where: {
+          userId: user.id,
+        },
+      });
+
       const bankAccount = await this.prisma.bankAccount.findUnique({
         where: { id: initiateBankAccountTransferDto.bankAccountId },
       });
+
+      // const convertedAmount = await this.getExchangeRate(
+      //   userWallet.currencyId,
+      //   'NGN',
+      // );
+
+      const walletBalanceInNGN =
+        await this.requestService.handleCurrencyConversion(
+          Number(userWallet.walletBalance),
+          'NGN',
+        );
+
+      console.log('walletBalanceInNGN ', walletBalanceInNGN);
+
+      if (
+        Number(walletBalanceInNGN) <
+        Number(initiateBankAccountTransferDto.amount)
+      ) {
+        throw new BadRequestException('Insufficient balance');
+      }
       if (!bankAccount) {
         throw new NotFoundException('Bank account not found');
       }
+
+      console.log('logging transfer data', {
+        amount: Number(initiateBankAccountTransferDto.amount),
+        reason: 'Withdrawal to bank account',
+        reference: reference,
+        recipient: transferRecipientId,
+      });
+
       const response = await axios.post(
-        `${configuration().paystack.paystackUrl}/transfers`,
+        `${configuration().paystack.paystackUrl}/transfer`,
         {
-          amount: initiateBankAccountTransferDto.amount,
-          bank_code: bankAccount.bankCode,
-          account_number: bankAccount.accountNumber,
-          currency: 'NGN',
-          reference: crypto.randomUUID(),
+          source: 'balance',
+          amount:
+            Number(initiateBankAccountTransferDto.amount) * convertionValue ||
+            100,
+          reason: 'Withdrawal to bank account',
+          reference: reference,
+          recipient: transferRecipientId,
         },
         {
           headers: {
@@ -778,13 +849,121 @@ export class PaymentService {
           },
         },
       );
-      return response.data;
+
+      const psData = await response?.data;
+
+      // --- Validate Paystack success ---
+      if (!psData || psData.status !== true) {
+        throw new InternalServerErrorException(
+          psData?.message || 'Transfer failed',
+        );
+      }
+
+      console.log('psData', psData);
+
+      this.createPaymentRecord({
+        userId: user.id,
+        requestId: null,
+        amount: Number(initiateBankAccountTransferDto.amount),
+        currency: 'NGN',
+        paymentMethod: PaymentChannelEnum.PAYSTACK,
+        paymentReference: reference,
+        type: TransactionType.WITHDRAWAL,
+        status: TransactionStatus.PENDING,
+        isOtpSent: psData.data.status === 'otp' ? true : false,
+        transferCode: psData.data.transfer_code || null,
+      });
+
+      const remainingBalanceAfterTransfer =
+        Number(walletBalanceInNGN) -
+        Number(initiateBankAccountTransferDto.amount);
+
+      const remainingBalanceAfterTransferInBaseCurrency =
+        await this.requestService.convertToBaseCurrency(
+          Number(remainingBalanceAfterTransfer),
+          'NGN',
+        );
+
+      console.log(
+        'remainingBalanceAfterTransfer',
+        remainingBalanceAfterTransfer,
+      );
+
+      console.log(
+        'remainingBalanceAfterTransferInBaseCurrency',
+        remainingBalanceAfterTransferInBaseCurrency,
+      );
+
+      console.log('updating wallet balance', {
+        userId: user.id,
+        walletBalance: remainingBalanceAfterTransferInBaseCurrency,
+      });
+
+      // await this.prisma.wallet.update({
+      //   where: { userId: user.id },
+      //   data: {
+      //     walletBalance: remainingBalanceAfterTransferInBaseCurrency,
+      //   },
+      // });
+
+      return {
+        status: 'success',
+        reference: reference,
+        transferCode: psData.data.transfer_code || null,
+        isOtpSent: psData.data.status === 'otp' ? true : false,
+      };
     } catch (error) {
       console.error('Error initiating bank account transfer:', error);
       throw error;
     }
   }
 
+  async getOrCreateTransferRecipient(user: User, bankAccountId: string) {
+    const userData = await this.prisma.user.findUnique({
+      where: { id: user.id },
+    });
+    if (!userData.transferRecipientId) {
+      const transferRecipient = await this.createTransferRecipient(
+        user,
+        bankAccountId,
+      );
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          transferRecipientId: transferRecipient.recipient_code,
+        },
+      });
+      return transferRecipient.recipient_code;
+    }
+    return userData.transferRecipientId;
+  }
+
+  async createTransferRecipient(
+    user: User,
+    bankAccountId: string,
+  ): Promise<TransferRecipientResponseType> {
+    const bankAccount = await this.prisma.bankAccount.findUnique({
+      where: { id: bankAccountId },
+    });
+    const response = await axios.post(
+      `${configuration().paystack.paystackUrl}/transferrecipient`,
+      {
+        email: user.email,
+        type: 'nuban',
+        bank_code: bankAccount.bankCode,
+        account_number: bankAccount.accountNumber,
+        account_name: bankAccount.accountName,
+        currency: 'NGN',
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${configuration().paystack.secretKey}`,
+        },
+      },
+    );
+    return (response.data as PaymentResponseType<TransferRecipientResponseType>)
+      .data;
+  }
   async getBankAccountList(user: User) {
     try {
       return this.prisma.bankAccount.findMany({
@@ -793,6 +972,76 @@ export class PaymentService {
     } catch (error) {
       console.error('Error getting bank account list:', error);
       throw error;
+    }
+  }
+
+  async updateWalletBalanceAfterWithdrawal(paymentRecord: Transaction) {
+    switch (paymentRecord.currency) {
+      case 'NGN': {
+        const userWallet = await this.prisma.wallet.findUnique({
+          where: { userId: paymentRecord.userId },
+        });
+
+        const walletBalanceInNGN =
+          await this.requestService.handleCurrencyConversion(
+            Number(userWallet.walletBalance),
+            'NGN',
+          );
+        const remainingBalanceAfterTransfer =
+          Number(walletBalanceInNGN) - Number(paymentRecord.amount);
+        const remainingBalanceAfterTransferInBaseCurrency =
+          await this.requestService.convertToBaseCurrency(
+            Number(remainingBalanceAfterTransfer),
+            'NGN',
+          );
+        await this.prisma.wallet.update({
+          where: { userId: paymentRecord.userId },
+          data: { walletBalance: remainingBalanceAfterTransferInBaseCurrency },
+        });
+        await this.prisma.transaction.update({
+          where: { id: paymentRecord.id },
+          data: { status: TransactionStatus.COMPLETED },
+        });
+        break;
+      }
+      default:
+        throw new BadRequestException('Currency not supported');
+    }
+  }
+
+  async finalizeTransfer(user: User, finalizeTransferDto: FinalizeTransferDto) {
+    try {
+      const transfer = await axios.post(
+        `${configuration().paystack.paystackUrl}/transfer/finalize_transfer`,
+        {
+          transfer_code: finalizeTransferDto.transferCode,
+          otp: String(finalizeTransferDto.otp),
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${configuration().paystack.secretKey}`,
+          },
+        },
+      );
+    } catch (error) {
+      console.error('Error finalizing transfer:', error);
+      throw new InternalServerErrorException('Transfer finalization failed');
+    }
+  }
+
+  async resendOtp(user: User, resendOtpDto: ResendOtpDto) {
+    try {
+      const response = await axios.post(
+        `${configuration().paystack.paystackUrl}/transfer/resend_otp`,
+        {
+          transfer_code: resendOtpDto.transferCode,
+          reason: 'Resending OTP',
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error resending OTP:', error);
+      throw new InternalServerErrorException('OTP resending failed');
     }
   }
 }

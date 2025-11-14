@@ -10,10 +10,13 @@ import {
   RequestStatus,
   Requests,
   WalletEarningsHistoryStatus,
+  TransactionType,
+  Transaction,
 } from '@prisma/client';
 import { VybraaConfigService } from 'src/common/services/vybraa-config.service';
 import { TemplateConfigEnum } from 'src/utils/enum';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PaymentService } from 'src/payment/payment.service';
 
 @Injectable()
 export class BackgroundJobsService {
@@ -24,6 +27,7 @@ export class BackgroundJobsService {
     private readonly httpService: HttpService,
     private readonly vybraaConfigService: VybraaConfigService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly paymentService: PaymentService,
   ) {}
 
   // create wallet for user without wallet
@@ -155,6 +159,66 @@ export class BackgroundJobsService {
     }
   }
 
+  @Cron(CronExpression.EVERY_MINUTE)
+  async checkPendingWithdrawals() {
+    try {
+      const pendingWithdrawals = await this.prisma.transaction.findMany({
+        where: {
+          status: TransactionStatus.PENDING,
+          type: TransactionType.WITHDRAWAL,
+        },
+      });
+
+      this.logger.log(
+        `Found ${pendingWithdrawals.length} pending withdrawals to process`,
+      );
+
+      for (const withdrawal of pendingWithdrawals) {
+        await this.processPendingWithdrawal(withdrawal);
+      }
+    } catch (error) {
+      this.logger.error('Error in pending withdrawals check:', error);
+    }
+  }
+
+  private async processPendingWithdrawal(withdrawal: Transaction) {
+    try {
+      this.logger.log(`Processing pending withdrawal ${withdrawal.id}`);
+      const withdrawalStatusTransaction =
+        await this.verifyPaymentWithPaystackWithdrawal(withdrawal.reference);
+      if (withdrawalStatusTransaction) {
+        if (withdrawalStatusTransaction.status === 'success') {
+          await this.paymentService.updateWalletBalanceAfterWithdrawal(
+            withdrawal,
+          );
+        } else if (withdrawalStatusTransaction.status === 'blocked') {
+          await this.prisma.transaction.update({
+            where: { id: withdrawal.id },
+            data: { status: TransactionStatus.BLOCKED },
+          });
+
+          this.logger.log('Withdrawal blocked', withdrawalStatusTransaction);
+        } else if (withdrawalStatusTransaction.status === 'failed') {
+          await this.prisma.transaction.update({
+            where: { id: withdrawal.id },
+            data: { status: TransactionStatus.FAILED },
+          });
+
+          this.logger.log('Withdrawal failed', withdrawalStatusTransaction);
+        } else if (withdrawalStatusTransaction.status === 'abandoned') {
+          await this.prisma.transaction.update({
+            where: { id: withdrawal.id },
+            data: { status: TransactionStatus.CANCELLED },
+          });
+
+          this.logger.log('Withdrawal aborted', withdrawalStatusTransaction);
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error in pending withdrawal check:', error);
+    }
+  }
+
   private async processPendingTransaction(transaction: any) {
     try {
       this.logger.log(`Processing pending transaction ${transaction.id}`);
@@ -203,6 +267,25 @@ export class BackgroundJobsService {
       return response.data.data;
     } catch (error) {
       this.logger.error(`Error verifying payment ${reference}:`, error);
+      this.logger.error(error.response.data);
+      return null;
+    }
+  }
+
+  private async verifyPaymentWithPaystackWithdrawal(reference: string) {
+    try {
+      const response = await axios.get(
+        `${configuration().paystack.paystackUrl}/transfer/verify/${reference}`,
+        {
+          headers: {
+            Authorization: `Bearer ${configuration().paystack.secretKey}`,
+          },
+        },
+      );
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Error verifying payment ${reference}:`, error);
+      this.logger.error(error.response.data);
       return null;
     }
   }

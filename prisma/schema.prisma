@@ -22,6 +22,7 @@ model User {
   isAdmin          Boolean           @default(false)
   profilePhotoUrl  String?      
   ipAddressCountry String?
+  transferRecipientId String?        @unique
   celebrityProfile CelebrityProfile?
   wallet           Wallet?  
   transactions     Transaction[]
@@ -271,6 +272,8 @@ model Transaction {
   currency     String
   releaseDate DateTime?
   amount      Decimal             @db.Decimal(15, 2)
+  isOtpSent   Boolean             @default(false)
+  transferCode String?
   description String?
   reference   String?             // External reference (e.g., payment gateway reference)
   flutterwaveTransactionId String?
@@ -341,6 +344,7 @@ enum TransactionStatus {
   FAILED
   CANCELLED
   PROCESSING
+  BLOCKED
 }
 
 enum EscrowType {
@@ -446,6 +450,7 @@ model BankAccount {
   accountNumber   String
   routingNumber   String?
   accountName     String
+  currency        VybraaCurrency @default(NGN)
   userId          String
   accountType     AccountType @default(SAVINGS)
   isActive        Boolean     @default(false)
@@ -456,8 +461,9 @@ model BankAccount {
   user            User       @relation(fields: [userId], references: [id])
 
   @@map("bank_accounts")
-  @@unique([bankCode, accountNumber])
+  @@unique([bankCode, accountNumber, userId])
 }
+
 
 
 enum AccountType {

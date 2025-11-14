@@ -17,7 +17,12 @@ import { PaymentService } from './payment.service';
 import { WebhookDto } from './dtos/webhook.dto';
 import { FlutterwaveWebhookDto } from './dtos/flutterwave-webhook.dto';
 import { RequestLimitService } from '../request-limit/request-limit.service';
-import { RequestStatus, TransactionStatus, User } from '@prisma/client';
+import {
+  RequestStatus,
+  Transaction,
+  TransactionStatus,
+  User,
+} from '@prisma/client';
 import { Public, UserDecorator } from 'src/decorators';
 import {
   CreateBankAccountDto,
@@ -29,6 +34,7 @@ import { PaymentChannelEnum, TemplateConfigEnum } from 'src/utils/enum';
 import { FlutterwaveResponse, FlutterwaveTransaction } from 'src/types/payment';
 import { AuthGuard } from 'src/guards/auth.guard';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { FinalizeTransferDto, ResendOtpDto } from './dtos/payment-record.dto';
 
 @Controller('payment')
 export class PaymentController {
@@ -121,6 +127,7 @@ export class PaymentController {
   }
 
   private async handlePaymentSuccess(webhookData: WebhookDto) {
+    let paymentRecord: Transaction;
     const { data } = webhookData;
     this.logger.log('Processing successful payment', {
       reference: data.reference,
@@ -135,25 +142,46 @@ export class PaymentController {
       );
 
       if (!request) {
-        this.logger.warn(
-          `No request found for payment reference: ${data.reference}`,
+        //check if payment record already exists
+        paymentRecord = await this.paymentService.getPaymentRecordByReference(
+          data.reference,
         );
-        return;
+
+        if (!paymentRecord) {
+          throw new BadRequestException('Payment record not found');
+        }
+
+        if (paymentRecord.status !== data.status) {
+          paymentRecord = await this.paymentService.createPaymentRecord({
+            userId: paymentRecord.userId,
+            requestId: request.id,
+            amount: data.amount / 100, // Convert from kobo to naira
+            currency: data.currency,
+            paymentMethod: data.channel,
+            paymentReference: data.reference,
+            status: TransactionStatus.COMPLETED,
+            metadata: data.metadata,
+          });
+
+          await this.paymentService.updateWalletBalanceAfterWithdrawal(
+            paymentRecord,
+          );
+        }
+      } else {
+        // Create payment record
+        paymentRecord = await this.paymentService.createPaymentRecord({
+          userId: request.userId,
+          requestId: request.id,
+          amount: data.amount / 100, // Convert from kobo to naira
+          currency: data.currency,
+          paymentMethod: data.channel,
+          paymentReference: data.reference,
+          status: TransactionStatus.COMPLETED,
+          metadata: data.metadata,
+        });
       }
 
       await this.paymentService.updateRequestIsPaidStatus(request.id);
-
-      // Create payment record
-      const paymentRecord = await this.paymentService.createPaymentRecord({
-        userId: request.userId,
-        requestId: request.id,
-        amount: data.amount / 100, // Convert from kobo to naira
-        currency: data.currency,
-        paymentMethod: data.channel,
-        paymentReference: data.reference,
-        status: TransactionStatus.COMPLETED,
-        metadata: data.metadata,
-      });
 
       if (paymentRecord) {
         // await this.paymentService.updateRequestStatus(request.id, 'IN_PROGRESS');
@@ -376,5 +404,25 @@ export class PaymentController {
   @HttpCode(HttpStatus.OK)
   async getBankAccountList(@UserDecorator() user: User) {
     return this.paymentService.getBankAccountList(user);
+  }
+
+  @Post('finalize/transfer')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async finalizeTransfer(
+    @Body() finalizeTransferDto: FinalizeTransferDto,
+    @UserDecorator() user: User,
+  ) {
+    return this.paymentService.finalizeTransfer(user, finalizeTransferDto);
+  }
+
+  @Post('resend/otp')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async resendOtp(
+    @Body() resendOtpDto: ResendOtpDto,
+    @UserDecorator() user: User,
+  ) {
+    return this.paymentService.resendOtp(user, resendOtpDto);
   }
 }
