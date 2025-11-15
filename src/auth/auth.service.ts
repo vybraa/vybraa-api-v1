@@ -63,7 +63,7 @@ export class AuthService {
     );
   }
 
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto, realIp: string) {
     try {
       const user = await this.prisma.user.findUnique({
         where: { email: loginDto.email },
@@ -91,7 +91,7 @@ export class AuthService {
         throw new BadRequestException('Please verify your email first');
       }
 
-      this.eventEmitter.emit('ip.address.country.updated', user.id);
+      this.eventEmitter.emit('ip.address.country.updated', user.id, realIp);
 
       // Log login activity
       // await this.logActivity({
@@ -601,7 +601,7 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
-  async passwordlessSignup(signupDto: PasswordlessSignupDto) {
+  async passwordlessSignup(signupDto: PasswordlessSignupDto, realIp: string) {
     try {
       // Check if user exists by email
       const existingUser = await this.prisma.user.findUnique({
@@ -644,7 +644,7 @@ export class AuthService {
         appName: 'VYBRAA',
       });
 
-      this.eventEmitter.emit('ip.address.country.updated', newUser.id);
+      this.eventEmitter.emit('ip.address.country.updated', newUser.id, realIp);
 
       // Generate JWT token for immediate use (optional)
       const jwtSecret = this.configService.get<string>('auth.jwt.secret');
@@ -686,7 +686,7 @@ export class AuthService {
     }
   }
 
-  async passwordlessLogin(email: string) {
+  async passwordlessLogin(email: string, realIp: string) {
     try {
       // Check if user exists
       const user = await this.prisma.user.findUnique({
@@ -718,7 +718,7 @@ export class AuthService {
         appName: 'VYBRAA',
       });
 
-      this.eventEmitter.emit('ip.address.country.updated', user.id);
+      this.eventEmitter.emit('ip.address.country.updated', user.id, realIp);
       const jwtSecret = this.configService.get<string>('auth.jwt.secret');
       const accessToken = this.jwtService.sign(
         {

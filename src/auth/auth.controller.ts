@@ -8,11 +8,10 @@ import {
   Delete,
   UseInterceptors,
   UploadedFile,
-  Res,
+  Req,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
-  CreateAuthDto,
   RegisterDto,
   VerificationTokenDto,
   LoginDto,
@@ -29,7 +28,7 @@ import { Public } from 'src/decorators/auth.decorator';
 import { UserDecorator } from 'src/decorators/user.decorator';
 import { CelebrityProfile, User } from '@prisma/client';
 import { FileUploadInterceptor } from 'src/common/interceptors/file-upload.interceptor';
-
+import { Request } from 'express';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -44,14 +43,32 @@ export class AuthController {
   @Public()
   async passwordlessSignup(
     @Body() passwordlessSignupDto: PasswordlessSignupDto,
+    @Req() req: Request,
   ) {
-    return await this.authService.passwordlessSignup(passwordlessSignupDto);
+    const realIp =
+      (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
+      req.ip ||
+      req.socket.remoteAddress;
+    return await this.authService.passwordlessSignup(
+      passwordlessSignupDto,
+      realIp,
+    );
   }
 
   @Post('passwordless-login')
   @Public()
-  async passwordlessLogin(@Body() passwordlessLoginDto: PasswordlessLoginDto) {
-    return await this.authService.passwordlessLogin(passwordlessLoginDto.email);
+  async passwordlessLogin(
+    @Body() passwordlessLoginDto: PasswordlessLoginDto,
+    @Req() req: Request,
+  ) {
+    const realIp =
+      (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
+      req.ip ||
+      req.socket.remoteAddress;
+    return await this.authService.passwordlessLogin(
+      passwordlessLoginDto.email,
+      realIp,
+    );
   }
 
   @Post('verify-magic-link')
@@ -62,8 +79,12 @@ export class AuthController {
 
   @Post('login')
   @Public()
-  async login(@Body() loginDto: LoginDto) {
-    return await this.authService.login(loginDto);
+  async login(@Body() loginDto: LoginDto, @Req() req: Request) {
+    const realIp =
+      (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
+      req.ip ||
+      req.socket.remoteAddress;
+    return await this.authService.login(loginDto, realIp);
   }
 
   @Post('forgot-password')

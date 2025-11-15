@@ -175,11 +175,14 @@ export class UserListener {
   }
 
   @OnEvent('ip.address.country.updated')
-  async updateIpAddressCountry(userId: string) {
-    console.log('Test ip address of anouther country');
-    const ipInfo = await this.httpService.axiosRef.get(
-      configuration().ipinfoUrl,
-    );
+  async updateIpAddressCountry(userId: string, userIp: string) {
+    console.log('Test ip address of anouther country', userIp);
+
+    const url = `${configuration().ipinfoUrl}/${userIp}/json?token=${configuration().ipinfoToken}`;
+
+    const response = await this.httpService.axiosRef.get(url);
+
+    const country = response.data?.country?.toLowerCase() || '';
     // const ipInfo = {
     //   data: {
     //     ip: '8.8.8.8',
@@ -195,7 +198,7 @@ export class UserListener {
     // console.log('ipInfo', ipInfo.data);
     await this.prisma.user.update({
       where: { id: userId },
-      data: { ipAddressCountry: ipInfo.data.country.toLowerCase() || '' },
+      data: { ipAddressCountry: country },
     });
   }
 }
