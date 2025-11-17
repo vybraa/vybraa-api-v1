@@ -179,9 +179,9 @@ export class UserListener {
     console.log('Test ip address of anouther country', userIp);
 
     const url = `${configuration().ipinfoUrl}/${userIp}/json?token=${configuration().ipinfoToken}`;
-
+    console.log('url', url);
     const response = await this.httpService.axiosRef.get(url);
-
+    console.log('response', response.data);
     const country = response.data?.country?.toLowerCase() || '';
     // const ipInfo = {
     //   data: {

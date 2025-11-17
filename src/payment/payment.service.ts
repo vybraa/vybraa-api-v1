@@ -1000,7 +1000,12 @@ export class PaymentService {
         });
         await this.prisma.transaction.update({
           where: { id: paymentRecord.id },
-          data: { status: TransactionStatus.COMPLETED },
+          data: {
+            status: TransactionStatus.COMPLETED,
+            escrowStatus: EscrowStatus.RELEASED,
+            releaseDate: new Date(),
+            escrowType: EscrowType.WITHDRAWAL,
+          },
         });
         break;
       }

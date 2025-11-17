@@ -45,10 +45,12 @@ export class AuthController {
     @Body() passwordlessSignupDto: PasswordlessSignupDto,
     @Req() req: Request,
   ) {
+    const forwarded = req.headers['x-forwarded-for'];
+
     const realIp =
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
-      req.ip ||
-      req.socket.remoteAddress;
+      typeof forwarded === 'string'
+        ? forwarded.split(',')[0].trim()
+        : req.connection?.remoteAddress || req.socket?.remoteAddress || req.ip;
     return await this.authService.passwordlessSignup(
       passwordlessSignupDto,
       realIp,
@@ -61,10 +63,12 @@ export class AuthController {
     @Body() passwordlessLoginDto: PasswordlessLoginDto,
     @Req() req: Request,
   ) {
+    const forwarded = req.headers['x-forwarded-for'];
+
     const realIp =
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
-      req.ip ||
-      req.socket.remoteAddress;
+      typeof forwarded === 'string'
+        ? forwarded.split(',')[0].trim()
+        : req.connection?.remoteAddress || req.socket?.remoteAddress || req.ip;
     return await this.authService.passwordlessLogin(
       passwordlessLoginDto.email,
       realIp,
@@ -80,10 +84,12 @@ export class AuthController {
   @Post('login')
   @Public()
   async login(@Body() loginDto: LoginDto, @Req() req: Request) {
+    const forwarded = req.headers['x-forwarded-for'];
+
     const realIp =
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
-      req.ip ||
-      req.socket.remoteAddress;
+      typeof forwarded === 'string'
+        ? forwarded.split(',')[0].trim()
+        : req.connection?.remoteAddress || req.socket?.remoteAddress || req.ip;
     return await this.authService.login(loginDto, realIp);
   }
 
