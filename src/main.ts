@@ -33,8 +33,9 @@ function rateLimitMiddleware(req: any, res: any, next: any) {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, new ExpressAdapter());
-
+  const app = await NestFactory.create(AppModule);
+  // Set trust proxy directly on the underlying Express instance
+  (app.getHttpAdapter().getInstance() as any).set('trust proxy', 1);
   // Apply rate limiting middleware
   app.use(rateLimitMiddleware);
   // Configure body parser limits for large image uploads
