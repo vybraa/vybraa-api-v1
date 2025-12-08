@@ -720,9 +720,9 @@ export class RequestService {
     });
 
     //check if size of file is greater than 15mb
-    if (file.size > 15 * 1024 * 1024) {
+    if (file.size > 50 * 1024 * 1024) {
       throw new BadRequestException(
-        'File size is too large. Maximum size is 15MB.',
+        'File size is too large. Maximum size is 100MB.',
       );
     }
 
