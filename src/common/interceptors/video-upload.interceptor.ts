@@ -35,7 +35,7 @@ export class VideoUploadInterceptor implements NestInterceptor {
     }
 
     // Validate file size (100MB limit for videos)
-    const maxSize = 50 * 1024 * 1024; // 50MB
+    const maxSize = 70 * 1024 * 1024; // 70MB
     if (file.size > maxSize) {
       throw new BadRequestException(
         'Video file size too large. Maximum size is 50MB.',

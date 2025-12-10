@@ -106,7 +106,7 @@ export class RequestController {
   @UseInterceptors(
     FileInterceptor('video', {
       limits: {
-        fileSize: 50 * 1024 * 1024, // 50MB
+        fileSize: 70 * 1024 * 1024, // 70MB
       },
     }),
     VideoUploadInterceptor,

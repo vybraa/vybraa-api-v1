@@ -39,8 +39,8 @@ async function bootstrap() {
   // Apply rate limiting middleware
   app.use(rateLimitMiddleware);
   // Configure body parser limits for large image uploads
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ limit: '50mb', extended: true }));
+  app.use(json({ limit: '70mb' }));
+  app.use(urlencoded({ limit: '70mb', extended: true }));
 
   app.useGlobalPipes(new ValidationPipe());
   // app.setGlobalPrefix('api/v1');
