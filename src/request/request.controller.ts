@@ -23,7 +23,11 @@ import { Roles } from 'src/decorators/roles.decorator';
 import { AuthGuard } from 'src/guards';
 import { ChangeRequestStatusDto, RequestsDto } from './dtos/requests.dto';
 import { UserDecorator } from 'src/decorators';
-import { CelebrityRequest, RequestSummary } from 'src/types/request';
+import {
+  CelebrityRequest,
+  PaymentHistoryResponse,
+  RequestSummary,
+} from 'src/types/request';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { VideoUploadInterceptor } from 'src/common/interceptors/video-upload.interceptor';
 
@@ -70,6 +74,19 @@ export class RequestController {
     @UserDecorator() user: User & { celebrityProfile: CelebrityProfile },
   ): Promise<RequestSummary> {
     return this.requestService.requestSummary(user);
+  }
+
+  @Get('payment-history')
+  @Roles(Role.FAN)
+  async getPaymentHistory(
+    @UserDecorator() user: User,
+    @Query('status') status?: RequestStatus,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<PaymentHistoryResponse> {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.requestService.getPaymentHistory(user, status, pageNum, limitNum);
   }
 
   @Get(':id')

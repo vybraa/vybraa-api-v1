@@ -193,6 +193,103 @@ export class RequestService {
     });
   }
 
+  /**
+   * Get payment history for a fan user
+   * Returns all paid requests with optional status filtering and pagination
+   */
+  async getPaymentHistory(
+    user: User,
+    status?: RequestStatus,
+    page: number = 1,
+    limit: number = 20,
+  ) {
+    const userData = await this.prisma.user.findUnique({
+      where: { id: user.id },
+    });
+
+    // Build where clause - only paid requests for this user
+    const where: Prisma.RequestsWhereInput = {
+      userId: user.id,
+      isRequestPaid: true,
+    };
+
+    // Add status filter if provided
+    if (status) {
+      where.status = status;
+    }
+
+    // Get total count for pagination
+    const total = await this.prisma.requests.count({ where });
+
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+    const totalPages = Math.ceil(total / limit);
+
+    // Fetch requests with pagination
+    const requests = await this.prisma.requests.findMany({
+      where,
+      include: {
+        celebrityProfile: true,
+        user: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    });
+
+    // Transform requests with currency conversion if needed
+    const payments = await Promise.all(
+      requests.map(async (request) => {
+        let price = request.price;
+        let currency = configuration().baseCurrency;
+
+        // Convert to NGN for Nigerian users
+        if (userData?.ipAddressCountry?.toLowerCase() === 'ng') {
+          currency = 'NGN';
+          price = (await this.handleCurrencyConversion(
+            Number(request.price),
+            'NGN',
+          )) as any;
+        }
+
+        return {
+          id: request.id,
+          user: {
+            id: request.user.id,
+            firstName: request.user.firstName,
+            lastName: request.user.lastName,
+            profilePhotoUrl: request.user.profilePhotoUrl,
+          },
+          recipient: request.recipient,
+          forName: request.forName,
+          fromName: request.fromName,
+          occasion: request.occasion,
+          instructions: request.instructions,
+          price: price.toString(),
+          currency,
+          status: request.status,
+          videoUrl: request.videoUrl,
+          isRequestPaid: request.isRequestPaid,
+          createdAt: request.createdAt.toISOString(),
+          celebrityProfile: {
+            id: request.celebrityProfile.id,
+            displayName: request.celebrityProfile.displayName,
+            profilePhotoUrl: request.celebrityProfile.profilePhotoUrl,
+            profession: request.celebrityProfile.profession,
+          },
+        };
+      }),
+    );
+
+    return {
+      payments,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
   async handleCurrencyConversion(amount: number, currency: string = 'ngn') {
     const conversionRateAmount = await this.prisma.exchangeRate.findFirst({
       where: {
