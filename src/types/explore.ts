@@ -2,8 +2,6 @@ import { CelebrityProfileType } from './profile';
 
 export interface ExploreData {
   trendingCelebrities: CelebrityProfileType[];
-  singers: CelebrityProfileType[];
-  influencers: CelebrityProfileType[];
-  actors: CelebrityProfileType[];
-  comedians: CelebrityProfileType[];
+  // Dynamic category keys from database
+  [categoryName: string]: CelebrityProfileType[];
 }

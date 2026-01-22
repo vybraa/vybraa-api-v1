@@ -6,311 +6,121 @@ import { ExploreData } from 'src/types/explore';
 
 @Injectable()
 export class ProfileService {
+  // Reusable select object for celebrity profiles
+  private readonly celebritySelect = {
+    id: true,
+    displayName: true,
+    requestPrice: true,
+    requestPriceCurrency: true,
+    category: true,
+    profession: true,
+    profilePhotoUrl: true,
+  } as const;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly requestService: RequestService,
   ) {}
-  async getMe(user: User, category: string): Promise<Partial<ExploreData>> {
+
+  async getMe(user: User, category: string): Promise<ExploreData> {
+    // Fetch all active categories from database
+    const categories = await this.prisma.category.findMany({
+      where: { status: true },
+      select: { id: true, name: true },
+    });
+
+    // Initialize metrics with trendingCelebrities and dynamic category keys
     const allExploreMetrics: ExploreData = {
       trendingCelebrities: [],
-      singers: [],
-      influencers: [],
-      actors: [],
-      comedians: [],
     };
-    const singersRelation = [
-      'artist',
-      'artists',
-      'singer',
-      'rapper',
-      'songwriter',
-    ];
 
-    const influencersRelation = [
-      'influencer',
-      'influencers',
-      'content creator',
-      'content creators',
-    ];
+    // Initialize all category keys
+    for (const cat of categories) {
+      allExploreMetrics[cat.name.toLowerCase()] = [];
+    }
 
-    const actorsRelation = [
-      'actor',
-      'actors',
-      'director',
-      'directors',
-      'producer',
-    ];
+    if (category === 'all') {
+      // Fetch trending and all category celebrities in parallel
+      const [trending, ...categoryResults] = await Promise.all([
+        this.fetchTrending(),
+        ...categories.map((cat) => this.fetchByCategoryId(cat.id)),
+      ]);
 
-    const comediansRelation = ['comedian', 'comedians', 'comedy', 'comedies'];
+      allExploreMetrics.trendingCelebrities = trending;
 
+      // Map results to their respective category names
+      categories.forEach((cat, index) => {
+        allExploreMetrics[cat.name.toLowerCase()] = categoryResults[index];
+      });
+    } else if (category === 'trending') {
+      allExploreMetrics.trendingCelebrities = await this.fetchTrending();
+    } else {
+      // Find the matching category by name (case-insensitive)
+      const matchingCategory = categories.find(
+        (cat) => cat.name.toLowerCase() === category.toLowerCase(),
+      );
+
+      if (matchingCategory) {
+        const results = await this.fetchByCategoryId(matchingCategory.id);
+        allExploreMetrics[matchingCategory.name.toLowerCase()] = results;
+      }
+    }
+
+    // Handle currency conversion for Nigerian users
     const userData = await this.prisma.user.findUnique({
       where: { id: user.id },
+      select: { ipAddressCountry: true },
     });
-    if (category === 'all') {
-      allExploreMetrics.trendingCelebrities =
-        await this.prisma.celebrityProfile.findMany({
-          where: {
-            isTrending: true,
-            reviewStatus: ReviewStatus.APPROVED,
-            isUnderReview: false,
-          },
-          select: {
-            id: true,
-            displayName: true,
-            requestPrice: true,
-            category: true,
-            requestPriceCurrency: true,
-            profession: true,
-            profilePhotoUrl: true,
-          },
-          orderBy: {
-            requestPrice: 'desc',
-          },
-          take: 10,
-        });
 
-      allExploreMetrics.singers = await this.prisma.celebrityProfile.findMany({
-        where: {
-          reviewStatus: ReviewStatus.APPROVED,
-          isUnderReview: false,
-          category: {
-            name: {
-              in: singersRelation,
-            },
-          },
-        },
-        select: {
-          id: true,
-          displayName: true,
-          requestPrice: true,
-          requestPriceCurrency: true,
-          category: true,
-          profession: true,
-          profilePhotoUrl: true,
-        },
-      });
-
-      allExploreMetrics.influencers =
-        await this.prisma.celebrityProfile.findMany({
-          where: {
-            reviewStatus: ReviewStatus.APPROVED,
-            isUnderReview: false,
-            category: {
-              name: {
-                in: influencersRelation,
-              },
-            },
-          },
-          select: {
-            id: true,
-            displayName: true,
-            requestPrice: true,
-            requestPriceCurrency: true,
-            category: true,
-            profession: true,
-            profilePhotoUrl: true,
-          },
-        });
-
-      allExploreMetrics.actors = await this.prisma.celebrityProfile.findMany({
-        where: {
-          reviewStatus: ReviewStatus.APPROVED,
-          isUnderReview: false,
-          category: {
-            name: {
-              in: actorsRelation,
-            },
-          },
-        },
-        select: {
-          id: true,
-          displayName: true,
-          requestPrice: true,
-          requestPriceCurrency: true,
-          category: true,
-          profession: true,
-          profilePhotoUrl: true,
-        },
-      });
-
-      allExploreMetrics.comedians = await this.prisma.celebrityProfile.findMany(
-        {
-          where: {
-            reviewStatus: ReviewStatus.APPROVED,
-            isUnderReview: false,
-            category: {
-              name: {
-                in: comediansRelation,
-              },
-            },
-          },
-          select: {
-            id: true,
-            displayName: true,
-            requestPrice: true,
-            requestPriceCurrency: true,
-            category: true,
-            profession: true,
-            profilePhotoUrl: true,
-          },
-        },
-      );
-    }
-
-    if (category === 'trending') {
-      allExploreMetrics.trendingCelebrities =
-        await this.prisma.celebrityProfile.findMany({
-          where: {
-            isTrending: true,
-          },
-          select: {
-            id: true,
-            displayName: true,
-            requestPrice: true,
-            requestPriceCurrency: true,
-            category: true,
-
-            profession: true,
-            profilePhotoUrl: true,
-          },
-        });
-    }
-
-    if (category === 'artists') {
-      allExploreMetrics.singers = await this.prisma.celebrityProfile.findMany({
-        where: {
-          reviewStatus: ReviewStatus.APPROVED,
-          isUnderReview: false,
-          category: {
-            name: {
-              in: singersRelation,
-            },
-          },
-        },
-        select: {
-          id: true,
-          displayName: true,
-          requestPrice: true,
-          requestPriceCurrency: true,
-          category: true,
-          profession: true,
-          profilePhotoUrl: true,
-        },
-      });
-    }
-
-    if (category === 'influencers') {
-      allExploreMetrics.influencers =
-        await this.prisma.celebrityProfile.findMany({
-          where: {
-            reviewStatus: ReviewStatus.APPROVED,
-            isUnderReview: false,
-            category: {
-              name: {
-                in: influencersRelation,
-              },
-            },
-          },
-          select: {
-            id: true,
-            displayName: true,
-            requestPrice: true,
-            requestPriceCurrency: true,
-            category: true,
-            profession: true,
-            profilePhotoUrl: true,
-          },
-        });
-    }
-
-    if (category === 'actors') {
-      allExploreMetrics.actors = await this.prisma.celebrityProfile.findMany({
-        where: {
-          reviewStatus: ReviewStatus.APPROVED,
-          isUnderReview: false,
-          category: {
-            name: {
-              in: actorsRelation,
-            },
-          },
-        },
-        select: {
-          id: true,
-          displayName: true,
-          requestPrice: true,
-          requestPriceCurrency: true,
-          category: true,
-          profession: true,
-          profilePhotoUrl: true,
-        },
-      });
-    }
-
-    if (category === 'comedians') {
-      const comedians = await this.prisma.celebrityProfile.findMany({
-        where: {
-          reviewStatus: ReviewStatus.APPROVED,
-          isUnderReview: false,
-          category: {
-            name: {
-              in: comediansRelation,
-            },
-          },
-        },
-        select: {
-          id: true,
-          displayName: true,
-          requestPrice: true,
-          requestPriceCurrency: true,
-          category: true,
-          profession: true,
-          profilePhotoUrl: true,
-        },
-      });
-
-      if (userData.ipAddressCountry === 'ng') {
-        comedians.forEach(async (comedian) => {
-          const convertedRequestPrice =
-            await this.requestService.handleCurrencyConversion(
-              Number(comedian.requestPrice),
-              'NGN',
-            );
-          comedian.requestPrice = convertedRequestPrice as any;
-        });
-      }
-
-      allExploreMetrics.comedians = comedians;
-    }
-
-    //  const category = await this.prisma.category.findFirst({
-    //     where: {
-    //       name: {
-    //         in: [category],
-
-    //       },
-    //     },
-    //   });
-    //   if (category) {
-    //     allExploreMetrics.singers = category.celebrityProfile;
-    //   }
-    if (userData.ipAddressCountry.toLowerCase() === 'ng') {
-      const keys = Object.keys(allExploreMetrics);
-
-      for (const key of keys) {
-        for await (const item of allExploreMetrics[key]) {
-          const convertedRequestPrice =
-            await this.requestService.handleCurrencyConversion(
-              Number(item.requestPrice),
-              'NGN',
-            );
-
-          item.requestPrice = convertedRequestPrice as any;
-          item.requestPriceCurrency = 'NGN';
-        }
-      }
+    if (userData?.ipAddressCountry?.toLowerCase() === 'ng') {
+      await this.convertAllPricesToNGN(allExploreMetrics);
     }
 
     return allExploreMetrics;
+  }
+
+  private async fetchTrending() {
+    return this.prisma.celebrityProfile.findMany({
+      where: {
+        isTrending: true,
+        isUnderReview: false,
+        reviewStatus: 'APPROVED',
+        isOnboardingComplete: true,
+      },
+      select: this.celebritySelect,
+      orderBy: { requestPrice: 'desc' },
+      take: 10,
+    });
+  }
+
+  private async fetchByCategoryId(categoryId: string) {
+    return this.prisma.celebrityProfile.findMany({
+      where: {
+        categoryId,
+        isUnderReview: false,
+        reviewStatus: 'APPROVED',
+        isOnboardingComplete: true,
+      },
+      select: this.celebritySelect,
+    });
+  }
+
+  private async convertAllPricesToNGN(metrics: ExploreData): Promise<void> {
+    // Collect all items from all categories (dynamic keys)
+    const allItems = Object.values(metrics).flat();
+
+    // Convert all prices in parallel
+    await Promise.all(
+      allItems.map(async (item) => {
+        const convertedPrice =
+          await this.requestService.handleCurrencyConversion(
+            Number(item.requestPrice),
+            'NGN',
+          );
+        item.requestPrice = convertedPrice as any;
+        item.requestPriceCurrency = 'NGN';
+      }),
+    );
   }
 
   async getCelebrityProfile(id: string, user: User) {
