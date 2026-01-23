@@ -17,8 +17,11 @@ import { AdminService } from './admin.service';
 import { Pagination } from 'src/types/pagination';
 import { User } from '@prisma/client';
 import { UpdatUserProfileDto } from './admin.dto';
-import { ChangeRequestStatusDto, UpdateRequestScriptDto } from 'src/request/dtos/requests.dto';
-import { RequestStatus } from '@prisma/client';
+import {
+  ChangeRequestStatusDto,
+  UpdateRequestScriptDto,
+} from 'src/request/dtos/requests.dto';
+import { RequestStatus, VideoReviewUrlStatus } from '@prisma/client';
 
 @Controller('admin')
 @UseGuards(AdminGuard)
@@ -48,6 +51,7 @@ export class AdminController {
     @Query('limit', new DefaultValuePipe(25), ParseIntPipe) limit: number,
     @Query('status') status?: string,
     @Query('paymentStatus') paymentStatus?: string,
+    @Query('videoReviewStatus') videoReviewStatus?: string,
     @Query('search') search?: string,
   ) {
     const normalizedStatus =
@@ -55,11 +59,20 @@ export class AdminController {
         ? (status as RequestStatus)
         : undefined;
 
+    const normalizedVideoReviewStatus =
+      videoReviewStatus &&
+      Object.values(VideoReviewUrlStatus).includes(
+        videoReviewStatus as VideoReviewUrlStatus,
+      )
+        ? (videoReviewStatus as VideoReviewUrlStatus)
+        : undefined;
+
     return await this.adminService.getRequests(
       page,
       limit,
       normalizedStatus,
       paymentStatus,
+      normalizedVideoReviewStatus,
       search,
     );
   }

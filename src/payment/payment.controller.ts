@@ -141,6 +141,7 @@ export class PaymentController {
         data.reference,
       );
 
+      //For Withdrawal
       if (!request) {
         //check if payment record already exists
         paymentRecord = await this.paymentService.getPaymentRecordByReference(

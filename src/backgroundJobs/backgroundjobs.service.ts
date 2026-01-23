@@ -12,6 +12,7 @@ import {
   WalletEarningsHistoryStatus,
   TransactionType,
   Transaction,
+  VideoReviewUrlStatus,
 } from '@prisma/client';
 import { VybraaConfigService } from 'src/common/services/vybraa-config.service';
 import { TemplateConfigEnum } from 'src/utils/enum';
@@ -488,6 +489,7 @@ export class BackgroundJobsService {
       const completedRequests = await this.prisma.requests.findMany({
         where: {
           status: RequestStatus.COMPLETED,
+          videoReviewUrlStatus: VideoReviewUrlStatus.APPROVED,
           transaction: {
             every: {
               isInEscrow: true,

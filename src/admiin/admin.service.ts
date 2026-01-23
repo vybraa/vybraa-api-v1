@@ -4,7 +4,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, RequestStatus, User } from '@prisma/client';
+import { Prisma, RequestStatus, User, VideoReviewUrlStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { Pagination } from 'src/types/pagination';
 import { UpdatUserProfileDto } from './admin.dto';
@@ -131,6 +131,7 @@ export class AdminService {
     limit: number,
     status?: RequestStatus,
     paymentStatus?: string,
+    videoReviewStatus?: VideoReviewUrlStatus,
     search?: string,
   ): Promise<Pagination<any>> {
     try {
@@ -159,6 +160,10 @@ export class AdminService {
         whereClause.isRequestPaid = true;
       } else if (paymentStatus === 'unpaid') {
         whereClause.isRequestPaid = false;
+      }
+
+      if (videoReviewStatus) {
+        whereClause.videoReviewUrlStatus = videoReviewStatus;
       }
 
       if (search) {
