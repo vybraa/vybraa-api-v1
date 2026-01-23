@@ -21,7 +21,11 @@ import {
 } from '@prisma/client';
 import { Roles } from 'src/decorators/roles.decorator';
 import { AuthGuard } from 'src/guards';
-import { ChangeRequestStatusDto, RequestsDto } from './dtos/requests.dto';
+import {
+  ChangeRequestStatusDto,
+  RequestsDto,
+  UpdateVideoReviewStatusDto,
+} from './dtos/requests.dto';
 import { UserDecorator } from 'src/decorators';
 import {
   CelebrityRequest,
@@ -102,6 +106,16 @@ export class RequestController {
     @UserDecorator() user: User & { celebrityProfile: CelebrityProfile },
   ) {
     return this.requestService.changeRequestStatus(id, request, user);
+  }
+
+  @Put(':id/video-review')
+  @Roles(Role.FAN)
+  async updateVideoReviewStatus(
+    @Param('id') id: string,
+    @Body() body: UpdateVideoReviewStatusDto,
+    @UserDecorator() user: User,
+  ): Promise<{ message: string; status: string }> {
+    return this.requestService.updateVideoReviewStatus(id, body.status, user);
   }
 
   @Post()

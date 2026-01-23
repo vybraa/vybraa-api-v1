@@ -38,3 +38,9 @@ export class UpdateRequestScriptDto {
   @IsOptional()
   videoReviewUrlStatus?: VideoReviewUrlStatus;
 }
+
+export class UpdateVideoReviewStatusDto {
+  @IsEnum(VideoReviewUrlStatus)
+  @IsNotEmpty()
+  status: VideoReviewUrlStatus;
+}

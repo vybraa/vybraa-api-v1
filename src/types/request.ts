@@ -14,6 +14,7 @@ export interface CelebrityRequest {
   price: string;
   currency: string;
   status: string;
+  videoReviewUrlStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
   celebrityProfile?: {
     id: string;
     displayName: string;

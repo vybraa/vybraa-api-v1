@@ -14,6 +14,7 @@ import {
   RequestStatus,
   Role,
   User,
+  VideoReviewUrlStatus,
 } from '@prisma/client';
 import { ChangeRequestStatusDto, RequestsDto } from './dtos/requests.dto';
 import configuration from 'src/config/configuration';
@@ -102,6 +103,7 @@ export class RequestService {
           instructions: request.instructions,
           price: request.price.toString(),
           currency: configuration().baseCurrency,
+          videoReviewUrlStatus: request.videoReviewUrlStatus,
         };
       });
 
@@ -182,6 +184,7 @@ export class RequestService {
             price: price.toString(),
             currency: currency,
             status: request.status,
+            videoReviewUrlStatus: request.videoReviewUrlStatus,
             celebrityProfile: {
               id: request.celebrityProfile.id,
               displayName: request.celebrityProfile.displayName,
@@ -297,6 +300,63 @@ export class RequestService {
       page,
       limit,
       totalPages,
+    };
+  }
+
+  /**
+   * Update video review status (Accept/Reject)
+   * Fan can approve or reject the video they received
+   */
+  async updateVideoReviewStatus(
+    requestId: string,
+    status: VideoReviewUrlStatus,
+    user: User,
+  ): Promise<{ message: string; status: string }> {
+    // Find the request
+    const request = await this.prisma.requests.findUnique({
+      where: { id: requestId },
+      include: { celebrityProfile: true },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+
+    // Verify the request belongs to this user
+    if (request.userId !== user.id) {
+      throw new BadRequestException(
+        'You are not authorized to review this request',
+      );
+    }
+
+    // Verify there is a video to review
+    if (!request.videoUrl) {
+      throw new BadRequestException(
+        'No video available to review for this request',
+      );
+    }
+
+    // Verify the request is completed (has video)
+    if (request.status !== RequestStatus.COMPLETED) {
+      throw new BadRequestException(
+        'Can only review videos for completed requests',
+      );
+    }
+
+    // Update the video review status
+    await this.prisma.requests.update({
+      where: { id: requestId },
+      data: { videoReviewUrlStatus: status },
+    });
+
+    const statusMessage =
+      status === VideoReviewUrlStatus.APPROVED
+        ? 'Video accepted successfully'
+        : 'Video review submitted for rejection';
+
+    return {
+      message: statusMessage,
+      status,
     };
   }
 
