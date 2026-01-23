@@ -106,7 +106,9 @@ model Requests {
   videoUrl              String?
   fromName              String?
   isRequestPaid         Boolean           @default(false)
-  price                 Decimal           @default(0) @db.Decimal(15, 2)  
+  price                 Decimal           @default(0) @db.Decimal(15, 2)
+  suggestedAiVideoScript String? 
+  videoReviewUrlStatus  VideoReviewUrlStatus? @default(PENDING)
   serviceFeeId          String    
   status                RequestStatus     @default(PENDING)    
   paymentReference      String?           @unique
@@ -123,6 +125,12 @@ model Requests {
   @@map("requests")
 }
 
+
+enum VideoReviewUrlStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
 
 model VybraBillingFees {
   id          String       @id @default(uuid())

@@ -1,4 +1,4 @@
-import { RecipientEnum, RequestOccasion, RequestStatus } from '@prisma/client';
+import { RecipientEnum, RequestOccasion, RequestStatus, VideoReviewUrlStatus } from '@prisma/client';
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class RequestsDto {
@@ -27,4 +27,14 @@ export class ChangeRequestStatusDto {
   @IsEnum(RequestStatus)
   @IsNotEmpty()
   status: RequestStatus;
+}
+
+export class UpdateRequestScriptDto {
+  @IsString()
+  @IsOptional()
+  suggestedAiVideoScript?: string;
+
+  @IsEnum(VideoReviewUrlStatus)
+  @IsOptional()
+  videoReviewUrlStatus?: VideoReviewUrlStatus;
 }

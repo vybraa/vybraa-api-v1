@@ -10,7 +10,7 @@ import { Pagination } from 'src/types/pagination';
 import { UpdatUserProfileDto } from './admin.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TemplateConfigEnum } from 'src/utils/enum';
-import { ChangeRequestStatusDto } from 'src/request/dtos/requests.dto';
+import { ChangeRequestStatusDto, UpdateRequestScriptDto } from 'src/request/dtos/requests.dto';
 import configuration from 'src/config/configuration';
 
 @Injectable()
@@ -268,6 +268,8 @@ export class AdminService {
           occasion: request.occasion,
           instructions: request.instructions,
           videoUrl: request.videoUrl,
+          suggestedAiVideoScript: request.suggestedAiVideoScript,
+          videoReviewUrlStatus: request.videoReviewUrlStatus,
           paymentReference: request.paymentReference,
           createdAt: request.createdAt,
           updatedAt: request.updatedAt,
@@ -346,6 +348,8 @@ export class AdminService {
           instructions: updatedRequest.instructions,
           paymentReference: updatedRequest.paymentReference,
           videoUrl: updatedRequest.videoUrl,
+          suggestedAiVideoScript: updatedRequest.suggestedAiVideoScript,
+          videoReviewUrlStatus: updatedRequest.videoReviewUrlStatus,
           createdAt: updatedRequest.createdAt,
           updatedAt: updatedRequest.updatedAt,
           user: updatedRequest.user
@@ -374,6 +378,87 @@ export class AdminService {
         throw error;
       }
       throw new InternalServerErrorException('Failed to update request status');
+    }
+  }
+
+  async updateRequestScript(
+    id: string,
+    payload: UpdateRequestScriptDto,
+  ): Promise<{ message: string; request: any }> {
+    try {
+      const existingRequest = await this.prisma.requests.findUnique({
+        where: { id },
+      });
+
+      if (!existingRequest) {
+        throw new NotFoundException('Request not found');
+      }
+
+      const updateData: any = {};
+      if (payload.suggestedAiVideoScript !== undefined) {
+        updateData.suggestedAiVideoScript = payload.suggestedAiVideoScript;
+      }
+      if (payload.videoReviewUrlStatus !== undefined) {
+        updateData.videoReviewUrlStatus = payload.videoReviewUrlStatus;
+      }
+
+      const updatedRequest = await this.prisma.requests.update({
+        where: { id },
+        data: updateData,
+        include: {
+          user: true,
+          celebrityProfile: true,
+          vybraaServiceFee: true,
+        },
+      });
+
+      const baseCurrency = configuration().baseCurrency ?? 'USD';
+
+      return {
+        message: 'Request script updated successfully',
+        request: {
+          id: updatedRequest.id,
+          status: updatedRequest.status,
+          isRequestPaid: updatedRequest.isRequestPaid,
+          price: updatedRequest.price.toString(),
+          currency: updatedRequest.vybraaServiceFee?.currency ?? baseCurrency,
+          recipient: updatedRequest.recipient,
+          forName: updatedRequest.forName,
+          fromName: updatedRequest.fromName,
+          occasion: updatedRequest.occasion,
+          instructions: updatedRequest.instructions,
+          paymentReference: updatedRequest.paymentReference,
+          videoUrl: updatedRequest.videoUrl,
+          suggestedAiVideoScript: updatedRequest.suggestedAiVideoScript,
+          videoReviewUrlStatus: updatedRequest.videoReviewUrlStatus,
+          createdAt: updatedRequest.createdAt,
+          updatedAt: updatedRequest.updatedAt,
+          user: updatedRequest.user
+            ? {
+                id: updatedRequest.user.id,
+                firstName: updatedRequest.user.firstName,
+                lastName: updatedRequest.user.lastName,
+                email: updatedRequest.user.email,
+              }
+            : null,
+          celebrityProfile: updatedRequest.celebrityProfile
+            ? {
+                id: updatedRequest.celebrityProfile.id,
+                displayName: updatedRequest.celebrityProfile.displayName,
+                legalName: updatedRequest.celebrityProfile.legalName,
+                profession: updatedRequest.celebrityProfile.profession,
+                profilePhotoUrl:
+                  updatedRequest.celebrityProfile.profilePhotoUrl,
+              }
+            : null,
+        },
+      };
+    } catch (error) {
+      console.error('Error in updateRequestScript:', error);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to update request script');
     }
   }
 

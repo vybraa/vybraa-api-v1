@@ -17,7 +17,7 @@ import { AdminService } from './admin.service';
 import { Pagination } from 'src/types/pagination';
 import { User } from '@prisma/client';
 import { UpdatUserProfileDto } from './admin.dto';
-import { ChangeRequestStatusDto } from 'src/request/dtos/requests.dto';
+import { ChangeRequestStatusDto, UpdateRequestScriptDto } from 'src/request/dtos/requests.dto';
 import { RequestStatus } from '@prisma/client';
 
 @Controller('admin')
@@ -71,6 +71,15 @@ export class AdminController {
     @Body() payload: ChangeRequestStatusDto,
   ) {
     return await this.adminService.updateRequestStatus(id, payload);
+  }
+
+  @Admin()
+  @Patch('requests/:id/script')
+  async updateRequestScript(
+    @Param('id') id: string,
+    @Body() payload: UpdateRequestScriptDto,
+  ) {
+    return await this.adminService.updateRequestScript(id, payload);
   }
 
   @Admin()
