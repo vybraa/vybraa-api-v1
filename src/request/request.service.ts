@@ -344,15 +344,23 @@ export class RequestService {
     }
 
     // Update the video review status
+    // If rejected, also change request status back to IN_PROGRESS so celebrity can upload new video
+    const updateData: any = { videoReviewUrlStatus: status };
+    
+    if (status === VideoReviewUrlStatus.REJECTED) {
+      // Reset status to IN_PROGRESS so celebrity can upload a new video
+      updateData.status = RequestStatus.IN_PROGRESS;
+    }
+    
     await this.prisma.requests.update({
       where: { id: requestId },
-      data: { videoReviewUrlStatus: status },
+      data: updateData,
     });
 
     const statusMessage =
       status === VideoReviewUrlStatus.APPROVED
         ? 'Video accepted successfully'
-        : 'Video review submitted for rejection';
+        : 'Video rejected. Celebrity can now upload a new video';
 
     return {
       message: statusMessage,
