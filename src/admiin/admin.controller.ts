@@ -17,6 +17,11 @@ import { AdminService } from './admin.service';
 import { Pagination } from 'src/types/pagination';
 import { User } from '@prisma/client';
 import { UpdatUserProfileDto } from './admin.dto';
+import {
+  ChangeRequestStatusDto,
+  UpdateRequestScriptDto,
+} from 'src/request/dtos/requests.dto';
+import { RequestStatus, VideoReviewUrlStatus } from '@prisma/client';
 
 @Controller('admin')
 @UseGuards(AdminGuard)
@@ -37,6 +42,57 @@ export class AdminController {
   @Get('metrics')
   async getMetrics(): Promise<any> {
     return await this.adminService.getMetrics();
+  }
+
+  @Admin()
+  @Get('requests')
+  async getRequests(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(25), ParseIntPipe) limit: number,
+    @Query('status') status?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('videoReviewStatus') videoReviewStatus?: string,
+    @Query('search') search?: string,
+  ) {
+    const normalizedStatus =
+      status && Object.values(RequestStatus).includes(status as RequestStatus)
+        ? (status as RequestStatus)
+        : undefined;
+
+    const normalizedVideoReviewStatus =
+      videoReviewStatus &&
+      Object.values(VideoReviewUrlStatus).includes(
+        videoReviewStatus as VideoReviewUrlStatus,
+      )
+        ? (videoReviewStatus as VideoReviewUrlStatus)
+        : undefined;
+
+    return await this.adminService.getRequests(
+      page,
+      limit,
+      normalizedStatus,
+      paymentStatus,
+      normalizedVideoReviewStatus,
+      search,
+    );
+  }
+
+  @Admin()
+  @Patch('requests/:id/status')
+  async updateRequestStatus(
+    @Param('id') id: string,
+    @Body() payload: ChangeRequestStatusDto,
+  ) {
+    return await this.adminService.updateRequestStatus(id, payload);
+  }
+
+  @Admin()
+  @Patch('requests/:id/script')
+  async updateRequestScript(
+    @Param('id') id: string,
+    @Body() payload: UpdateRequestScriptDto,
+  ) {
+    return await this.adminService.updateRequestScript(id, payload);
   }
 
   @Admin()

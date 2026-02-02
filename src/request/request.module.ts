@@ -1,15 +1,15 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { RequestController } from './request.controller';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { RequestService } from './request.service';
 import { JwtService } from '@nestjs/jwt';
 import { CloudinaryModule } from 'src/common/cloudinary/cloudinary.module';
-import { PaymentService } from 'src/payment/payment.service';
+import { PrismaModule } from 'src/prisma/prisma.module';
+import { PaymentModule } from 'src/payment/payment.module';
 
 @Module({
-  imports: [CloudinaryModule],
+  imports: [CloudinaryModule, PrismaModule, forwardRef(() => PaymentModule)],
   controllers: [RequestController],
-  providers: [RequestService, PrismaService, JwtService, PaymentService],
+  providers: [RequestService, JwtService],
   exports: [RequestService],
 })
 export class RequestsModule {}

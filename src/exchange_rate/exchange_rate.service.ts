@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateExchangeRateDto,
@@ -44,5 +44,21 @@ export class ExchangeRateService {
     });
 
     return exchangeRate;
+  }
+
+  async getExchangeRateByToCurrency(toCurrency: string) {
+    try {
+      const exchangeRate = await this.prisma.exchangeRate.findFirst({
+        where: {
+          toCurrency,
+        },
+      });
+      return exchangeRate;
+    } catch (error) {
+      console.log('Error getting exchange rate by to currency', error);
+      throw new BadRequestException(
+        'Error getting exchange rate by to currency',
+      );
+    }
   }
 }

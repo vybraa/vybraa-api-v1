@@ -17,7 +17,7 @@ import * as argon2 from 'argon2';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CelebrityProfile, User } from '@prisma/client';
+import { CelebrityGallery, CelebrityProfile, User } from '@prisma/client';
 import { HttpService } from '@nestjs/axios';
 import { randomBytes } from 'crypto';
 import { CloudinaryService } from 'src/common/cloudinary/cloudinary.service';
@@ -63,10 +63,13 @@ export class AuthService {
     );
   }
 
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto, realIp: string) {
     try {
       const user = await this.prisma.user.findUnique({
         where: { email: loginDto.email },
+        include: {
+          celebrityProfile: true,
+        },
       });
 
       if (!user) {
@@ -91,7 +94,7 @@ export class AuthService {
         throw new BadRequestException('Please verify your email first');
       }
 
-      this.eventEmitter.emit('ip.address.country.updated', user.id);
+      this.eventEmitter.emit('ip.address.country.updated', user.id, realIp);
 
       // Log login activity
       // await this.logActivity({
@@ -118,8 +121,31 @@ export class AuthService {
           isAdmin: user.isAdmin,
           isVerified: user.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
+
+      // Generate refresh token
+      const refreshToken = await this.generateRefreshToken(user.id);
+
+      // Determine onboarding status and next step for celebrity users
+      let onboardingInfo = null;
+      if (user.userType === 'CELEBRITY') {
+        if (user.celebrityProfile) {
+          onboardingInfo = {
+            hasStartedOnboarding: true,
+            currentStep: user.celebrityProfile.onboardingStep,
+            isOnboardingComplete: user.celebrityProfile.isOnboardingComplete,
+            nextStep: user.celebrityProfile.onboardingStep + 1,
+          };
+        } else {
+          onboardingInfo = {
+            hasStartedOnboarding: false,
+            currentStep: 0,
+            isOnboardingComplete: false,
+            nextStep: 1,
+          };
+        }
+      }
 
       return {
         message: 'Login successful',
@@ -130,8 +156,11 @@ export class AuthService {
           lastName: user.lastName,
           userType: user.userType,
           isVerified: user.isVerified,
+          celebrityProfile: user.celebrityProfile,
         },
         accessToken: token,
+        refreshToken,
+        onboardingInfo,
       };
     } catch (error) {
       if (
@@ -199,8 +228,11 @@ export class AuthService {
           userType: user.userType,
           isVerified: user.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
+
+      // Generate refresh token
+      const refreshToken = await this.generateRefreshToken(user.id);
 
       return {
         message: 'Social authentication successful',
@@ -213,6 +245,7 @@ export class AuthService {
           isVerified: user.isVerified,
         },
         accessToken: token,
+        refreshToken,
       };
     } catch (error) {
       console.log('Social auth error:', error);
@@ -270,19 +303,32 @@ export class AuthService {
 
   async refreshToken(refreshToken: string) {
     try {
-      const jwtSecret = this.configService.get<string>('AUTH_JWT_SECRET');
-      const payload = await this.jwtService.verify(refreshToken, {
-        secret: jwtSecret,
+      // Find refresh token in database
+      const storedToken = await this.prisma.refreshToken.findUnique({
+        where: { token: refreshToken },
+        include: { user: true },
       });
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.id },
-      });
+      if (!storedToken) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
 
+      // Check if token has expired
+      if (storedToken.expiresAt < new Date()) {
+        // Delete expired token
+        await this.prisma.refreshToken.delete({
+          where: { id: storedToken.id },
+        });
+        throw new UnauthorizedException('Refresh token has expired');
+      }
+
+      const user = storedToken.user;
       if (!user) {
         throw new UnauthorizedException('User not found');
       }
 
+      // Generate new access token
+      const jwtSecret = this.configService.get<string>('AUTH_JWT_SECRET');
       const newToken = this.jwtService.sign(
         {
           id: user.id,
@@ -292,7 +338,7 @@ export class AuthService {
           userType: user.userType,
           isVerified: user.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
 
       return {
@@ -307,6 +353,9 @@ export class AuthService {
         },
       };
     } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
@@ -398,6 +447,25 @@ export class AuthService {
     );
   }
 
+  private async generateRefreshToken(userId: string): Promise<string> {
+    // Generate a secure random token
+    const token = randomBytes(32).toString('hex');
+
+    // Store in database with 30 days expiration
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        token,
+        userId,
+        expiresAt,
+      },
+    });
+
+    return token;
+  }
+
   async verifyToken(body: VerificationTokenDto, user: User) {
     try {
       const tokenExist = await this.prisma.verifyToken.findFirst({
@@ -451,8 +519,11 @@ export class AuthService {
             isVerified: getUser.isVerified,
             celebrityProfile: getUser.celebrityProfile,
           },
-          { secret: jwtSecret },
+          { secret: jwtSecret, expiresIn: '24h' },
         );
+
+        // Generate refresh token
+        const refreshToken = await this.generateRefreshToken(user.id);
 
         // Determine onboarding status and next step
         let onboardingInfo = null;
@@ -480,6 +551,7 @@ export class AuthService {
         return {
           success: true,
           accessToken,
+          refreshToken,
           user: {
             id: getUser.id,
             email: getUser.email,
@@ -546,13 +618,15 @@ export class AuthService {
   }
 
   async logout(user: User) {
-    // In a stateless JWT setup, logout is typically handled client-side
-    // by removing the token. However, you could implement a token blacklist
-    // or use refresh tokens for more security.
+    // Delete all refresh tokens for this user
+    await this.prisma.refreshToken.deleteMany({
+      where: { userId: user.id },
+    });
+
     return { message: 'Logged out successfully' };
   }
 
-  async passwordlessSignup(signupDto: PasswordlessSignupDto) {
+  async passwordlessSignup(signupDto: PasswordlessSignupDto, realIp: string) {
     try {
       // Check if user exists by email
       const existingUser = await this.prisma.user.findUnique({
@@ -595,7 +669,7 @@ export class AuthService {
         appName: 'VYBRAA',
       });
 
-      this.eventEmitter.emit('ip.address.country.updated', newUser.id);
+      this.eventEmitter.emit('ip.address.country.updated', newUser.id, realIp);
 
       // Generate JWT token for immediate use (optional)
       const jwtSecret = this.configService.get<string>('auth.jwt.secret');
@@ -608,8 +682,11 @@ export class AuthService {
           userType: newUser.userType,
           isVerified: newUser.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
+
+      // Generate refresh token
+      const refreshToken = await this.generateRefreshToken(newUser.id);
 
       return {
         message:
@@ -623,6 +700,7 @@ export class AuthService {
           isVerified: newUser.isVerified,
         },
         accessToken, // Return token for immediate authentication
+        refreshToken,
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -633,7 +711,7 @@ export class AuthService {
     }
   }
 
-  async passwordlessLogin(email: string) {
+  async passwordlessLogin(email: string, realIp: string) {
     try {
       // Check if user exists
       const user = await this.prisma.user.findUnique({
@@ -665,7 +743,7 @@ export class AuthService {
         appName: 'VYBRAA',
       });
 
-      this.eventEmitter.emit('ip.address.country.updated', user.id);
+      this.eventEmitter.emit('ip.address.country.updated', user.id, realIp);
       const jwtSecret = this.configService.get<string>('auth.jwt.secret');
       const accessToken = this.jwtService.sign(
         {
@@ -676,8 +754,12 @@ export class AuthService {
           userType: user.userType,
           isVerified: user.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
+
+      // Generate refresh token
+      const refreshToken = await this.generateRefreshToken(user.id);
+
       return {
         message:
           'Magic link sent to your email. Please check your inbox and click the link to log in.',
@@ -690,6 +772,7 @@ export class AuthService {
           isVerified: user.isVerified,
         },
         accessToken,
+        refreshToken,
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -744,8 +827,11 @@ export class AuthService {
           userType: user.userType,
           isVerified: user.isVerified,
         },
-        { secret: jwtSecret },
+        { secret: jwtSecret, expiresIn: '24h' },
       );
+
+      // Generate refresh token
+      const refreshToken = await this.generateRefreshToken(user.id);
 
       // Delete used magic link token
       await this.prisma.magicLinkToken.delete({
@@ -766,6 +852,7 @@ export class AuthService {
           isVerified: user.isVerified,
         },
         accessToken,
+        refreshToken,
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -789,10 +876,18 @@ export class AuthService {
   }
 
   update(id: number, user: User, updateAuthDto: UpdateAuthDto) {
-    const data: UpdateAuthDto = {
-      firstName: updateAuthDto.firstName,
-      lastName: updateAuthDto.lastName,
-    };
+    const data: Partial<User> = {};
+    
+    if (updateAuthDto.firstName) {
+      data.firstName = updateAuthDto.firstName;
+    }
+    if (updateAuthDto.lastName) {
+      data.lastName = updateAuthDto.lastName;
+    }
+    if (updateAuthDto.phoneNumber !== undefined) {
+      data.phoneNumber = updateAuthDto.phoneNumber;
+    }
+    
     return this.prisma.user.update({
       where: { id: user.id },
       data: data,
@@ -851,6 +946,49 @@ export class AuthService {
 
     return {
       message: 'Celebrity profile updated successfully',
+      data,
+    };
+  }
+
+  async updateCelebrityGallery(
+    file: Express.Multer.File,
+    celebrityGallery: CelebrityGallery,
+    user: User,
+  ) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // Upload file to Cloudinary
+    console.log('Backend: Uploading file to Cloudinary');
+    const uploadResult = await this.cloudinaryService.uploadProfilePhoto(
+      file,
+      user.id,
+      FolderEnum.CELEBRITY_PROFILE,
+    );
+    console.log('Backend: File uploaded to Cloudinary successfully');
+    const data: Partial<CelebrityGallery> = {
+      videoUrl: celebrityGallery.videoUrl || undefined,
+      imageUrl: celebrityGallery.imageUrl || undefined,
+    };
+
+    const celebrityProfile = await this.prisma.celebrityProfile.findUnique({
+      where: { userId: user.id },
+    });
+
+    if (!celebrityProfile) {
+      throw new BadRequestException('Celebrity profile not found');
+    }
+
+    await this.prisma.celebrityGallery.create({
+      data: {
+        celebrityProfileId: celebrityProfile.id,
+        videoUrl: celebrityGallery.videoUrl || undefined,
+        imageUrl: celebrityGallery.imageUrl || undefined,
+      },
+    });
+    return {
+      message: 'Celebrity gallery updated successfully',
       data,
     };
   }

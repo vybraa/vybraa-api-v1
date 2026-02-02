@@ -9,6 +9,11 @@ export type PaymentResponseType<T> = {
   status: boolean;
   data: T;
 };
+
+export type TransferRecipientResponseType = {
+  recipient_code: string;
+};
+
 export interface FlutterwaveTransaction {
   id: number;
   tx_ref: string;

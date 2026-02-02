@@ -78,8 +78,8 @@ export default () => ({
     email: process.env.SMTP_EMAIL || 'admin@vybraa.com',
   },
 
-  ipinfoUrl:
-    process.env.IPINFO_URL || 'https://ipinfo.io/json?token=bc47a59f04d14c',
+  ipinfoUrl: process.env.IPINFO_URL || 'https://ipinfo.io',
+  ipinfoToken: process.env.IPINFO_TOKEN || 'bc47a59f04d14c',
   baseUrl: process.env.BASE_URL || 'https://www.vybraa.com',
   baseCurrency: process.env.BASE_CURRENCY || 'USD',
   paymentChannel: process.env.PAYMENT_CHANNEL || 'paystack',

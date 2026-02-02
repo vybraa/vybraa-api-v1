@@ -47,4 +47,9 @@ export class ExchangeRateController {
       updateExchangeRateDto,
     );
   }
+
+  @Get('get-exchange-rate/:toCurrency')
+  async getExchangeRateByToCurrency(@Param('toCurrency') toCurrency: string) {
+    return this.exchangeRateService.getExchangeRateByToCurrency(toCurrency);
+  }
 }

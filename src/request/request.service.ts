@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -12,6 +14,7 @@ import {
   RequestStatus,
   Role,
   User,
+  VideoReviewUrlStatus,
 } from '@prisma/client';
 import { ChangeRequestStatusDto, RequestsDto } from './dtos/requests.dto';
 import configuration from 'src/config/configuration';
@@ -29,6 +32,7 @@ export class RequestService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cloudinaryService: CloudinaryService,
+    @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
     private readonly eventEmitter: EventEmitter2,
   ) {
@@ -45,9 +49,16 @@ export class RequestService {
     const userData = await this.prisma.user.findUnique({
       where: { id: user.id },
     });
+
     if (user.userType === Role.CELEBRITY) {
+      const celebrityProfile = await this.prisma.celebrityProfile.findUnique({
+        where: { userId: user.id },
+      });
+      if (!celebrityProfile) {
+        throw new NotFoundException('Celebrity profile not found');
+      }
       const whereClause: Prisma.RequestsWhereInput = {
-        celebrityProfileId: user.celebrityProfile.id,
+        celebrityProfileId: celebrityProfile.id,
         status,
       };
 
@@ -92,6 +103,7 @@ export class RequestService {
           instructions: request.instructions,
           price: request.price.toString(),
           currency: configuration().baseCurrency,
+          videoReviewUrlStatus: request.videoReviewUrlStatus,
         };
       });
 
@@ -172,6 +184,7 @@ export class RequestService {
             price: price.toString(),
             currency: currency,
             status: request.status,
+            videoReviewUrlStatus: request.videoReviewUrlStatus,
             celebrityProfile: {
               id: request.celebrityProfile.id,
               displayName: request.celebrityProfile.displayName,
@@ -290,6 +303,71 @@ export class RequestService {
     };
   }
 
+  /**
+   * Update video review status (Accept/Reject)
+   * Fan can approve or reject the video they received
+   */
+  async updateVideoReviewStatus(
+    requestId: string,
+    status: VideoReviewUrlStatus,
+    user: User,
+  ): Promise<{ message: string; status: string }> {
+    // Find the request
+    const request = await this.prisma.requests.findUnique({
+      where: { id: requestId },
+      include: { celebrityProfile: true },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+
+    // Verify the request belongs to this user
+    if (request.userId !== user.id) {
+      throw new BadRequestException(
+        'You are not authorized to review this request',
+      );
+    }
+
+    // Verify there is a video to review
+    if (!request.videoUrl) {
+      throw new BadRequestException(
+        'No video available to review for this request',
+      );
+    }
+
+    // Verify the request is completed (has video)
+    if (request.status !== RequestStatus.COMPLETED) {
+      throw new BadRequestException(
+        'Can only review videos for completed requests',
+      );
+    }
+
+    // Update the video review status
+    // If rejected, also change request status back to IN_PROGRESS so celebrity can upload new video
+    const updateData: any = { videoReviewUrlStatus: status };
+    
+    if (status === VideoReviewUrlStatus.REJECTED) {
+      // Reset status to IN_PROGRESS so celebrity can upload a new video
+      updateData.status = RequestStatus.IN_PROGRESS;
+    }
+    
+    await this.prisma.requests.update({
+      where: { id: requestId },
+      data: updateData,
+    });
+
+    const statusMessage =
+      status === VideoReviewUrlStatus.APPROVED
+        ? 'Video accepted successfully'
+        : 'Video rejected. Celebrity can now upload a new video';
+
+    return {
+      message: statusMessage,
+      status,
+    };
+  }
+
   async handleCurrencyConversion(amount: number, currency: string = 'ngn') {
     const conversionRateAmount = await this.prisma.exchangeRate.findFirst({
       where: {
@@ -302,6 +380,20 @@ export class RequestService {
       throw new NotFoundException('Conversion rate not found');
     }
     return amount * Number(conversionRateAmount.rate);
+  }
+
+  async convertToBaseCurrency(amount: number, currency: string = 'ngn') {
+    const conversionRateAmount = await this.prisma.exchangeRate.findFirst({
+      where: {
+        fromCurrency: configuration().baseCurrency.toUpperCase(),
+        toCurrency: currency.toUpperCase(),
+        isActive: true,
+      },
+    });
+    if (!conversionRateAmount) {
+      throw new NotFoundException('Conversion rate not found');
+    }
+    return amount / Number(conversionRateAmount.rate);
   }
 
   private getNextResetDate(): Date {
@@ -791,6 +883,13 @@ export class RequestService {
       where: { id, celebrityProfileId: user.celebrityProfile.id },
       include: { celebrityProfile: { include: { user: true } }, user: true },
     });
+
+    //check if size of file is greater than 15mb
+    if (file.size > 70 * 1024 * 1024) {
+      throw new BadRequestException(
+        'File size is too large. Maximum size is 70MB.',
+      );
+    }
 
     if (!request) {
       throw new NotFoundException('Request not found or access denied');

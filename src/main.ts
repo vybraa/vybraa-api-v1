@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { json, urlencoded } from 'express';
-
+import { ExpressAdapter } from '@nestjs/platform-express';
 // Simple in-memory rate limiting
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const WINDOW_MS = 60000; // 1 minute
@@ -34,12 +34,13 @@ function rateLimitMiddleware(req: any, res: any, next: any) {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
+  // Set trust proxy directly on the underlying Express instance
+  (app.getHttpAdapter().getInstance() as any).set('trust proxy', 1);
   // Apply rate limiting middleware
   app.use(rateLimitMiddleware);
   // Configure body parser limits for large image uploads
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ limit: '50mb', extended: true }));
+  app.use(json({ limit: '70mb' }));
+  app.use(urlencoded({ limit: '70mb', extended: true }));
 
   app.useGlobalPipes(new ValidationPipe());
   // app.setGlobalPrefix('api/v1');

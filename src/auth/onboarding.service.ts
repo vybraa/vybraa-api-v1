@@ -73,6 +73,15 @@ export class OnboardingService {
       configuration().ipinfoUrl,
     );
 
+    const checkIfEmailExists = await this.prisma.user.findUnique({
+      where: {
+        email: data.email,
+      },
+    });
+    if (checkIfEmailExists) {
+      throw new BadRequestException('Email already exists');
+    }
+
     // Handle first-time registration
     if (data.isFirstTimeRegistration) {
       // Update user information and set user type to CELEBRITY
@@ -120,6 +129,7 @@ export class OnboardingService {
       };
       const accessToken = this.jwtService.sign(payload, {
         secret: process.env.AUTH_JWT_SECRET,
+        expiresIn: '24h',
       });
 
       return {
@@ -181,6 +191,7 @@ export class OnboardingService {
       };
       const accessToken = this.jwtService.sign(payload, {
         secret: process.env.AUTH_JWT_SECRET,
+        expiresIn: '24h',
       });
 
       return {
@@ -224,6 +235,7 @@ export class OnboardingService {
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.AUTH_JWT_SECRET,
+      expiresIn: '24h',
     });
 
     return {
@@ -295,6 +307,7 @@ export class OnboardingService {
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.AUTH_JWT_SECRET,
+      expiresIn: '24h',
     });
 
     return {
@@ -341,6 +354,7 @@ export class OnboardingService {
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.AUTH_JWT_SECRET,
+      expiresIn: '24h',
     });
 
     return {
@@ -409,6 +423,7 @@ export class OnboardingService {
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.AUTH_JWT_SECRET,
+      expiresIn: '24h',
     });
 
     //Create a limit request for the celebrity
