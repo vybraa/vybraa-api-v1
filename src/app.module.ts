@@ -22,6 +22,7 @@ import { PaymentModule } from './payment/payment.module';
 import { RequestLimitModule } from './request-limit/request-limit.module';
 import { WalletModule } from './wallet/wallet.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
+import { SupportTicketModule } from './support-ticket/support-ticket.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
     WalletModule,
     RequestLimitModule,
     ActivityLogsModule,
+    SupportTicketModule,  
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
