@@ -67,6 +67,9 @@ export class AuthService {
     try {
       const user = await this.prisma.user.findUnique({
         where: { email: loginDto.email },
+        include: {
+          celebrityProfile: true,
+        },
       });
 
       if (!user) {
@@ -124,6 +127,26 @@ export class AuthService {
       // Generate refresh token
       const refreshToken = await this.generateRefreshToken(user.id);
 
+      // Determine onboarding status and next step for celebrity users
+      let onboardingInfo = null;
+      if (user.userType === 'CELEBRITY') {
+        if (user.celebrityProfile) {
+          onboardingInfo = {
+            hasStartedOnboarding: true,
+            currentStep: user.celebrityProfile.onboardingStep,
+            isOnboardingComplete: user.celebrityProfile.isOnboardingComplete,
+            nextStep: user.celebrityProfile.onboardingStep + 1,
+          };
+        } else {
+          onboardingInfo = {
+            hasStartedOnboarding: false,
+            currentStep: 0,
+            isOnboardingComplete: false,
+            nextStep: 1,
+          };
+        }
+      }
+
       return {
         message: 'Login successful',
         user: {
@@ -133,9 +156,11 @@ export class AuthService {
           lastName: user.lastName,
           userType: user.userType,
           isVerified: user.isVerified,
+          celebrityProfile: user.celebrityProfile,
         },
         accessToken: token,
         refreshToken,
+        onboardingInfo,
       };
     } catch (error) {
       if (
@@ -851,10 +876,18 @@ export class AuthService {
   }
 
   update(id: number, user: User, updateAuthDto: UpdateAuthDto) {
-    const data: UpdateAuthDto = {
-      firstName: updateAuthDto.firstName,
-      lastName: updateAuthDto.lastName,
-    };
+    const data: Partial<User> = {};
+    
+    if (updateAuthDto.firstName) {
+      data.firstName = updateAuthDto.firstName;
+    }
+    if (updateAuthDto.lastName) {
+      data.lastName = updateAuthDto.lastName;
+    }
+    if (updateAuthDto.phoneNumber !== undefined) {
+      data.phoneNumber = updateAuthDto.phoneNumber;
+    }
+    
     return this.prisma.user.update({
       where: { id: user.id },
       data: data,
