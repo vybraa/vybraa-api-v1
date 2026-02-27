@@ -27,6 +27,7 @@ import { UpdateAuthDto } from './dto/update-auth.dto';
 import { Public } from 'src/decorators/auth.decorator';
 import { UserDecorator } from 'src/decorators/user.decorator';
 import { CelebrityProfile, User } from '@prisma/client';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadInterceptor } from 'src/common/interceptors/file-upload.interceptor';
 import { Request } from 'express';
 @Controller('auth')
@@ -172,7 +173,7 @@ export class AuthController {
   }
 
   @Patch('profile-photo')
-  @UseInterceptors(FileUploadInterceptor)
+  @UseInterceptors(FileInterceptor('profilePhoto'), FileUploadInterceptor)
   updateProfilePhoto(
     @UploadedFile() file: Express.Multer.File,
 
