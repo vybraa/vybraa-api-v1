@@ -913,6 +913,11 @@ export class AuthService {
       where: { id: user.id },
       data: { profilePhotoUrl: uploadResult.secure_url },
     });
+
+    return {
+      message: 'Profile photo updated successfully',
+      profilePhotoUrl: uploadResult.secure_url,
+    };
   }
 
   remove(id: number) {
