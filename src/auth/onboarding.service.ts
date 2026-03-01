@@ -17,6 +17,7 @@ import {
 import { FolderEnum } from 'src/utils/enum';
 import configuration from 'src/config/configuration';
 import { HttpService } from '@nestjs/axios';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class OnboardingService {
@@ -25,6 +26,7 @@ export class OnboardingService {
     private jwtService: JwtService,
     private cloudinaryService: CloudinaryService,
     private httpService: HttpService,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   async checkOnboardingEligibility(userId: string) {
@@ -130,6 +132,12 @@ export class OnboardingService {
       const accessToken = this.jwtService.sign(payload, {
         secret: process.env.AUTH_JWT_SECRET,
         expiresIn: '24h',
+      });
+
+      this.eventEmitter.emit('verification.sent', {
+        name: user.firstName,
+        email: user.email,
+        appName: 'VYBRAA',
       });
 
       return {

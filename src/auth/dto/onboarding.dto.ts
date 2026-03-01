@@ -28,6 +28,7 @@ export class OnboardingStep1Dto {
   countryCodeId: string;
 
   @IsString()
+  @IsOptional()
   phoneNumber: string;
 
   @IsString()

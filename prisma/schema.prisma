@@ -55,7 +55,7 @@ model CelebrityProfile {
   displayName           String
   dateOfBirth           DateTime
   countryCodeId         String
-  phoneNumber           String
+  phoneNumber           String?
   countryOfResidence    String
   primarySocialPlatform String
   socialHandle          String

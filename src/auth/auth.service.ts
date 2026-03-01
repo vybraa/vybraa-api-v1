@@ -895,6 +895,7 @@ export class AuthService {
   }
 
   async updateProfilePhoto(file: Express.Multer.File, user: User) {
+    console.log('Backend: Updating profile photo:', file);
     if (!file || !file.buffer) {
       throw new BadRequestException('No file uploaded');
     }
@@ -912,6 +913,11 @@ export class AuthService {
       where: { id: user.id },
       data: { profilePhotoUrl: uploadResult.secure_url },
     });
+
+    return {
+      message: 'Profile photo updated successfully',
+      profilePhotoUrl: uploadResult.secure_url,
+    };
   }
 
   remove(id: number) {
