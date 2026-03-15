@@ -81,6 +81,11 @@ export class AuthService {
         user.password,
         loginDto.password,
       );
+      if (user.deletedAt) {
+        throw new BadRequestException(
+          'This account has been deleted. Please contact support if you believe this is an error.',
+        );
+      }
       if (!isPasswordValid) {
         throw new UnauthorizedException('Invalid credentials');
       }
@@ -721,6 +726,12 @@ export class AuthService {
 
       if (!user) {
         throw new BadRequestException('User not found. Please sign up first.');
+      }
+
+      if (user.deletedAt) {
+        throw new BadRequestException(
+          'This account has been deleted. Please contact support if you believe this is an error.',
+        );
       }
 
       // Generate magic link token
