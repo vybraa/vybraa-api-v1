@@ -182,6 +182,11 @@ export class AuthController {
     return this.authService.updateProfilePhoto(file, user);
   }
 
+  @Delete('delete-account')
+  async deleteAccount(@UserDecorator() user: User) {
+    return this.authService.deleteAccount(user);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.authService.remove(+id);

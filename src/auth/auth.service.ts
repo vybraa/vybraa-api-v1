@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import {
@@ -80,6 +81,11 @@ export class AuthService {
         user.password,
         loginDto.password,
       );
+      if (user.deletedAt) {
+        throw new BadRequestException(
+          'This account has been deleted. Please contact support if you believe this is an error.',
+        );
+      }
       if (!isPasswordValid) {
         throw new UnauthorizedException('Invalid credentials');
       }
@@ -722,6 +728,12 @@ export class AuthService {
         throw new BadRequestException('User not found. Please sign up first.');
       }
 
+      if (user.deletedAt) {
+        throw new BadRequestException(
+          'This account has been deleted. Please contact support if you believe this is an error.',
+        );
+      }
+
       // Generate magic link token
       // const magicLinkToken = this.generateMagicLinkToken();
       // const tokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
@@ -922,6 +934,31 @@ export class AuthService {
 
   remove(id: number) {
     return `This action removes a #${id} auth`;
+  }
+
+  async deleteAccount(user: User) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id: user.id },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (existingUser.deletedAt) {
+      throw new BadRequestException('Account has already been deleted');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { deletedAt: new Date() },
+    });
+
+    await this.prisma.refreshToken.deleteMany({
+      where: { userId: user.id },
+    });
+
+    return { message: 'Account deleted successfully' };
   }
 
   async updateCelebrityProfile(updateAuthDto: CelebrityProfile, user: User) {
