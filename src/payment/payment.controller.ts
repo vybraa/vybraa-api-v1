@@ -46,6 +46,13 @@ export class PaymentController {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
+  @Get('paystack/verify/:reference')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  async verifyPaystackPayment(@Param('reference') reference: string) {
+    return this.paymentService.verifyPayment(reference);
+  }
+
   @Public()
   @Post('paystack/webhook')
   @HttpCode(HttpStatus.OK)
